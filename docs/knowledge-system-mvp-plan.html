@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人知识系统 · MVP 架构与落地方案</title>
+<style>
+  :root{
+    --primary:#2456A6; --primary-soft:#EEF3FB; --primary-line:#C9D8F0;
+    --text:#1A2233; --text-2:#5A6478; --bg:#F7F9FC; --card:#FFFFFF;
+    --line:#E4E9F2; --ok:#1E7A46; --ok-soft:#EAF6EF; --warn:#B3261E; --warn-soft:#FBEEEC;
+    --tag:#3E5DA8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'PingFang SC','Microsoft YaHei','Roboto','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:15px;}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 80px;}
+  header.hero{background:linear-gradient(135deg,#2456A6 0%,#3E6FB8 55%,#5B87CC 100%);color:#fff;padding:56px 20px 44px;text-align:center;}
+  header.hero .kicker{font-size:13px;letter-spacing:3px;opacity:.85;}
+  header.hero h1{font-size:30px;font-weight:700;margin:10px 0 12px;line-height:1.4;}
+  header.hero p{font-size:15px;opacity:.92;max-width:720px;margin:0 auto;line-height:1.8;}
+  .hero-meta{margin-top:22px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;}
+  .hero-meta span{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);border-radius:999px;padding:5px 14px;font-size:13px;}
+  nav.toc{position:sticky;top:0;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);z-index:10;}
+  nav.toc .inner{max-width:1000px;margin:0 auto;padding:10px 20px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+  nav.toc a{color:var(--text-2);text-decoration:none;font-size:13px;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  nav.toc a:hover{color:var(--primary);background:var(--primary-soft);}
+  section{margin-top:44px;}
+  h2{font-size:21px;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  h2 .no{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--primary);color:#fff;font-size:14px;flex-shrink:0;}
+  .sec-desc{color:var(--text-2);font-size:14px;margin-bottom:18px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin-top:14px;}
+  .card h3{font-size:16px;font-weight:600;margin-bottom:10px;}
+  .card p{font-size:14px;color:var(--text);margin-bottom:8px;}
+  .card ul,.card ol{margin:6px 0 10px 22px;font-size:14px;}
+  .card li{margin-bottom:6px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px;background:#fff;}
+  th{background:var(--primary-soft);color:var(--primary);text-align:left;padding:10px 12px;font-weight:600;border-bottom:2px solid var(--primary-line);}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;margin-right:6px;margin-bottom:4px;}
+  .tag.blue{background:var(--primary-soft);color:var(--tag);}
+  .tag.green{background:var(--ok-soft);color:var(--ok);}
+  .tag.red{background:var(--warn-soft);color:var(--warn);}
+  .tag.gray{background:#F0F2F6;color:var(--text-2);}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:14px;}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;border-top:3px solid var(--primary);}
+  .kpi .num{font-size:22px;font-weight:700;color:var(--primary);}
+  .kpi .lbl{font-size:13px;color:var(--text-2);margin-top:2px;}
+  .kpi .note{font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.6;}
+  .callout{border-left:4px solid var(--primary);background:var(--primary-soft);border-radius:0 12px 12px 0;padding:14px 18px;margin-top:14px;font-size:14px;}
+  .callout.warn{border-color:var(--warn);background:var(--warn-soft);}
+  .callout.ok{border-color:var(--ok);background:var(--ok-soft);}
+  .callout b{color:var(--primary);}
+  .callout.warn b{color:var(--warn);}
+  .callout.ok b{color:var(--ok);}
+  .arch{display:flex;flex-direction:column;gap:0;margin-top:16px;}
+  .arch .layer{border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .arch .layer .ln{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;}
+  .arch .layer .info{flex:1;min-width:220px;}
+  .arch .layer .info .t{font-weight:600;font-size:15px;}
+  .arch .layer .info .d{font-size:12.5px;color:var(--text-2);}
+  .arch .layer .sci{font-size:12px;color:var(--tag);background:var(--primary-soft);border-radius:999px;padding:3px 10px;}
+  .arch .arrow{text-align:center;color:var(--primary);font-size:16px;padding:4px 0;line-height:1;}
+  .arch .loop{border:1px dashed var(--ok);background:var(--ok-soft);border-radius:12px;padding:10px 16px;margin-top:10px;font-size:13px;color:var(--ok);}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--text-2);}
+  code{background:#EFF2F7;border-radius:5px;padding:1px 6px;font-size:13px;font-family:'JetBrains Mono',Consolas,monospace;color:#33405C;}
+  .pill{display:inline-block;background:var(--primary-soft);color:var(--primary);border-radius:8px;padding:2px 8px;font-size:12.5px;font-weight:600;margin-right:6px;}
+  @media (max-width:640px){
+    body{font-size:14px;}
+    header.hero h1{font-size:23px;}
+    table{font-size:12.5px;}
+    th,td{padding:8px;}
+    h2{font-size:18px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="kicker">PERSONAL KNOWLEDGE ENGINE · MVP PLAN</div>
+  <h1>个人知识系统 · MVP 架构与落地方案</h1>
+  <p>目标：从多设备、多应用捕获知识（文本 / 网页链接 / 音频 / 手写）→ AI 总结为原子笔记 → 依据知识科学理论构建持续生长的知识网络。本方案定义 MVP 的技术选型、科学依据、建链与生长机制、10 周落地路线与 30 天验收指标。</p>
+  <div class="hero-meta">
+    <span>范围：MVP · 本地优先 · 6 类采集源</span>
+    <span>周期：10 周落地</span>
+    <span>北极星指标：回取率</span>
+    <span>版本：v1.1</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="inner">
+    <a href="#summary">摘要决策</a>
+    <a href="#science">科学依据</a>
+    <a href="#scope">MVP 范围</a>
+    <a href="#schema">数据模型</a>
+    <a href="#arch">系统架构</a>
+    <a href="#stack">技术选型</a>
+    <a href="#linking">建链引擎</a>
+    <a href="#growth">生长机制</a>
+    <a href="#roadmap">路线图</a>
+    <a href="#kpi">验收指标</a>
+    <a href="#risk">风险对策</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- 摘要 -->
+<section id="summary">
+  <h2><span class="no">0</span>执行摘要与核心决策</h2>
+  <div class="sec-desc">六个决策定义了整个 MVP 的边界，后续所有设计都服从这些决策。</div>
+  <div class="card">
+    <table>
+      <tr><th style="width:60px;">编号</th><th style="width:200px;">决策</th><th>内容与理由</th></tr>
+      <tr><td><span class="tag blue">D1</span></td><td><b>本地优先</b></td><td>图谱、向量、FSRS 调度全部本地运行，数据不出设备。LLM 默认走云端 API（DeepSeek/Qwen，成本低），敏感来源（微信、聊天记录）强制切本地模型。隐私是底线，也是长期信任卖点。</td></tr>
+      <tr><td><span class="tag blue">D2</span></td><td><b>不引入图数据库</b></td><td>MVP 用 SQLite + 递归 CTE 承担图遍历。节点量 &lt;10⁵ 时性能足够，且零运维、单文件备份。迁移触发条件：节点 &gt;10⁵ 或需要实时图算法（社区发现/PageRank），再评估 Neo4j 或图专用层。</td></tr>
+      <tr><td><span class="tag blue">D3</span></td><td><b>科学建链</b></td><td>网络 = 原子节点 + 9 类类型化命题边 + 独立前提 DAG。所有链接必须可解释（带理由）可审计（带置信度与来源），拒绝"相似就拉线"的随意构建。依据：同化理论、概念图、知识空间理论（见 §1）。</td></tr>
+      <tr><td><span class="tag blue">D4</span></td><td><b>人工在环</b></td><td>建链走"LLM 建议 + 人工确认"：高置信（≥0.85）自动入图可一键撤回；中置信进建议箱；低置信丢弃。每周 15 分钟确认建议箱，反馈样本回流优化提示词。</td></tr>
+      <tr><td><span class="tag blue">D5</span></td><td><b>生长是主引擎</b></td><td>系统不是记录工具而是"知识生长引擎"：FSRS 每日回取 + 每周自动综合 + 冲突检测。北极星指标是<b>回取率</b>（到期节点被实际回顾的比例），不是存储量。</td></tr>
+      <tr><td><span class="tag blue">D6</span></td><td><b>采集增量扩展 · 多模态归一</b></td><td>全设备是长期目标，MVP 接 6 类源：文本类（浏览器、剪贴板、飞书）+ 链接提取 + 音频转写 + 手写识别。所有源统一为"采集队列 + 适配器"；音频、手写先转为<b>文本中间态</b>（ASR 转写 / OCR 识别），之后与文本走完全相同的建链与生长流程，网络构建的科学性不受输入模态影响。</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 科学依据 -->
+<section id="science">
+  <h2><span class="no">1</span>科学依据：知识网络为什么这么建</h2>
+  <div class="sec-desc">"不断生长的知识网络"必须有可追溯的理论支撑。以下 8 个理论与模型直接决定系统的建链规则、边类型、调度算法与综合机制，每一行都对应一条具体的设计规则，而非装饰性引用。</div>
+
+  <div class="card">
+    <table>
+      <tr><th style="width:150px;">理论 / 模型</th><th style="width:200px;">来源</th><th style="width:260px;">核心主张</th><th>落到系统的设计规则</th></tr>
+      <tr>
+        <td><b>同化理论</b>（Ausubel）</td><td>Ausubel, 1968</td>
+        <td>有意义学习 = 新知识连接到已有认知结构中相关（上位）概念；孤立信息只能机械记忆、迅速遗忘。</td>
+        <td><span class="tag blue">入图门槛</span>新节点必须与 ≥1 个已有节点建立命题链接，否则进入"待连接池"，不直接入图。网络只在"同化"中生长。</td>
+      </tr>
+      <tr>
+        <td><b>概念图</b>（Novak）</td><td>Novak &amp; Gowin, 1984</td>
+        <td>知识的最小单元是<b>命题</b>：概念 + 连接词 + 概念；概念图的网络结构本身就是意义的表征。</td>
+        <td><span class="tag blue">边类型</span>所有边必须是带类型的命题（9 类有向边），每条边附一句话理由。禁止无意义的"相关"连线。</td>
+      </tr>
+      <tr>
+        <td><b>卡片盒笔记法</b>（Zettelkasten）</td><td>Luhmann；Ahrens, 2017</td>
+        <td>原子笔记 + 双向链接 + 用自己的话重写；系统价值来自不同笔记间的"意外连接"与新观点涌现。</td>
+        <td><span class="tag blue">原子性</span>一节点一主张（≤200 字）；出链 ≥1；反链自动维护；把"综合产出新节点"设为系统目标而非副作用。</td>
+      </tr>
+      <tr>
+        <td><b>知识空间理论</b>（KST）</td><td>Doignon &amp; Falmagne, 1999</td>
+        <td>知识可建模为"前提结构"：概念之间存在学习依赖关系（先决条件），学习顺序应由结构决定。</td>
+        <td><span class="tag blue">前提 DAG</span>独立维护 prerequisite_of 边构成的有向无环图；回取与综合的主题顺序由图推导，而非时间顺序。成环即报错。</td>
+      </tr>
+      <tr>
+        <td><b>检索练习效应</b></td><td>Roediger &amp; Butler, 2011</td>
+        <td>主动提取记忆本身会强化记忆；重读的巩固效果远弱于检索。</td>
+        <td><span class="tag blue">回取形式</span>到期卡片先给标题+提示让大脑先检索，再展示正文；成功/失败反馈写回调度器。</td>
+      </tr>
+      <tr>
+        <td><b>间隔重复 / 记忆模型</b></td><td>Ebbinghaus, 1885；FSRS（开源，Anki 已集成）</td>
+        <td>遗忘可预测，最优复习间隔可由机器学习参数化的记忆模型计算（难度/稳定性/可回忆概率）。</td>
+        <td><span class="tag blue">调度</span>每个节点挂 FSRS 状态（难度、稳定性、到期日、复习次数、遗忘次数），到期自动进入每日回取队列。</td>
+      </tr>
+      <tr>
+        <td><b>合意困难</b>（Desirable Difficulties）</td><td>Bjork, 1994</td>
+        <td>适度增加提取难度能增强长期记忆保持。</td>
+        <td><span class="tag blue">难度分级</span>回取难度随稳定性上调（提示越来越少）；连续答对的节点拉长间隔，避免"熟练感假象"。</td>
+      </tr>
+      <tr>
+        <td><b>GraphRAG</b>（工程前沿）</td><td>Microsoft, 2024</td>
+        <td>对知识图谱做社区检测与分层摘要，能显著提升 LLM 检索与生成质量、降低幻觉。</td>
+        <td><span class="tag blue">综合机制</span>每周综合基于图社区（密度聚类）而非关键词搜索；图谱同时是检索基础设施与生长证据。</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="callout ok">
+    <b>科学链条总结：</b>同化理论决定<b>为什么连</b>（新知识必须挂到已有结构上）→ Novak 概念图决定<b>连成什么</b>（命题化有向边）→ KST 决定<b>往哪个方向连</b>（前提依赖 DAG）→ 检索练习与 FSRS 决定<b>如何强化连接</b>（按遗忘曲线回取）→ GraphRAG 决定<b>网络如何产出</b>（社区级综合）。这条链就是"科学构建，而非胡乱构建"的完整依据。
+  </div>
+</section>
+
+<!-- MVP 范围 -->
+<section id="scope">
+  <h2><span class="no">2</span>MVP 范围</h2>
+  <div class="sec-desc">明确"做什么"与"坚决不做什么"，避免范围蔓延拖垮 MVP。</div>
+  <div class="grid2">
+    <div class="card" style="margin-top:0;">
+      <h3>✅ MVP 包含（6 类采集源）</h3>
+      <ul>
+        <li><b>浏览器阅读</b>：Chrome/Edge 扩展，一键收藏 + 划词捕获（网页正文、划线片段）</li>
+        <li><b>剪贴板</b>：系统剪贴板守护，文本/代码即复制即捕获；自动识别 URL 并路由到链接提取器</li>
+        <li><b>飞书</b>：开放平台 API 拉取你授权的文档 / 消息（你的日常主阵地）</li>
+        <li><b>链接提取</b>：从任意平台（微信文章、知乎、B站、公众号等）复制链接 → 抓取网页正文 → 总结；静态提取失败时用无头浏览器兜底</li>
+        <li><b>音频</b>：录音设备导入 / 上传音频文件（会议、口述、播客）→ ASR 转写 → 自动总结为知识</li>
+        <li><b>手写</b>：拍照 / 扫描 / 上传手写笔记 → OCR 手写识别 → 校对 → 自动总结为知识</li>
+        <li>加工：多模态统一中间态（正文 / 转写 / OCR 文本）→ LLM 原子化 → 去重 → 质量门</li>
+        <li>建链：召回 + LLM 命题判定 + 建议箱 + 图谱视图</li>
+        <li>生长：FSRS 每日回取 + 每周综合 + 冲突检测 + 指标面板</li>
+      </ul>
+    </div>
+    <div class="card" style="margin-top:0;">
+      <h3>🚫 MVP 不做（留到后续）</h3>
+      <ul>
+        <li>手机端 App / 系统级全量采集（OS hook、无障碍）</li>
+        <li>微信收藏、邮件、视频笔记、PDF 批注（源 #7+，架构已预留适配器）</li>
+        <li>多端同步 / 云服务 / 协作共享</li>
+        <li>图数据库、分布式、移动端</li>
+        <li>自动发布 / 对外产品化（先跑通个人闭环）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 数据模型 -->
+<section id="schema">
+  <h2><span class="no">3</span>数据模型</h2>
+  <div class="sec-desc">所有科学规则都落在这三张表上。schema 用 SQLite 表达，向量由 sqlite-vec 的 vec0 虚拟表承载。</div>
+  <div class="card">
+    <h3>3.1 三张核心表</h3>
+    <table>
+      <tr><th>表</th><th>关键字段</th><th>说明</th></tr>
+      <tr>
+        <td><code>nodes</code></td>
+        <td><code>id</code> · <code>type</code>(concept/claim/source/question) · <code>title</code> · <code>body</code>(≤200 字主张) · <code>source_ref</code> · <code>embedding</code>(vec0) · <code>recall_state</code>(JSON: difficulty/stability/due/reps/lapses) · <code>status</code>(draft/active/archived)</td>
+        <td>原子笔记本体。embedding 由本地 BGE-M3 生成；recall_state 由 FSRS 维护。</td>
+      </tr>
+      <tr>
+        <td><code>edges</code></td>
+        <td><code>id</code> · <code>src_id</code> · <code>dst_id</code> · <code>rel_type</code>(9 类) · <code>rationale</code>(LLM 一句话理由) · <code>confidence</code>(0–1) · <code>confirm_status</code>(auto/pending/approved/rejected) · <code>created_at</code></td>
+        <td>命题化有向边。conflict 检测与前提 DAG 校验都在这层做。</td>
+      </tr>
+      <tr>
+        <td><code>sources</code></td>
+        <td><code>id</code> · <code>kind</code>(url/clipboard/message/audio/handwritten) · <code>raw_path</code>(原始文件/录音/图片归档) · <code>text_extracted</code>(转写或 OCR 中间文本) · <code>fingerprint</code>(去重指纹) · <code>title</code> · <code>captured_at</code></td>
+        <td>原始材料归档。音频存原始录音 + 转写文本；手写存原图 + OCR 文本；fingerprint 基于 text_extracted 计算，实现跨模态去重（辅以 embedding 阈值）。</td>
+      </tr>
+    </table>
+
+    <h3 style="margin-top:20px;">3.2 九类命题边（Novak 命题 × 工程实现）</h3>
+    <table>
+      <tr><th>rel_type</th><th>含义</th><th>示例</th><th>用途</th></tr>
+      <tr><td><span class="tag blue">implies</span></td><td>蕴含 / 因果</td><td>A 导致 B；A 蕴含 B</td><td>因果链推理</td></tr>
+      <tr><td><span class="tag blue">supports</span></td><td>支持 / 证据</td><td>实验数据支持该结论</td><td>证据链</td></tr>
+      <tr><td><span class="tag red">contradicts</span></td><td>反对 / 矛盾</td><td>新论文结论与旧笔记冲突</td><td>触发冲突报告</td></tr>
+      <tr><td><span class="tag blue">exemplifies</span></td><td>实例 / 例证</td><td>该概念的一个具体案例</td><td>抽象 ↔ 具体</td></tr>
+      <tr><td><span class="tag blue">refines</span></td><td>细化 / 精化</td><td>旧结论的新限定条件</td><td>知识演化</td></tr>
+      <tr><td><span class="tag blue">prerequisite_of</span></td><td>前提 / 先决</td><td>先理解 A 才能理解 B</td><td>KST 前提 DAG，决定学习顺序</td></tr>
+      <tr><td><span class="tag blue">contrasts</span></td><td>对比 / 区分</td><td>A 与 B 在维度 X 上不同</td><td>辨析</td></tr>
+      <tr><td><span class="tag green">merges</span></td><td>同义合并</td><td>两个节点描述同一主张</td><td>控制膨胀、剪枝</td></tr>
+      <tr><td><span class="tag gray">relates</span></td><td>弱关联</td><td>共享主题但关系待定</td><td>必须人工确认，防"假链接"</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- 架构 -->
+<section id="arch">
+  <h2><span class="no">4</span>系统架构（五层 + 生长回环）</h2>
+  <div class="sec-desc">数据流单向向下（采集→加工→存储→建链→生长），生长层通过综合与回取结果反哺网络层，形成"生长回环"——这是系统区别于普通笔记工具的结构特征。</div>
+
+  <div class="arch">
+    <div class="layer">
+      <div class="ln">1</div>
+      <div class="info"><div class="t">采集层 · 6 类源</div><div class="d">文本：浏览器扩展 · 剪贴板 · 飞书 API ｜ 链接：URL 提取器（无头浏览器兜底）｜ 音频：录音/上传 → ASR ｜ 手写：拍照/扫描 → OCR → 统一采集队列（源 = 适配器，可增量扩展）</div></div>
+      <span class="sci">适配器模式 · 多模态归一</span>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="layer">
+      <div class="ln">2</div>
+      <div class="info"><div class="t">加工层 · Process</div><div class="d">正文 / 转写 / OCR 统一为文本中间态 → 去噪 → LLM 原子化切分（一节点一主张）→ 去重（指纹 + embedding 阈值）→ 质量门（低置信进草稿箱 / 人工校对）</div></div>
+      <span class="sci">多模态统一 · 质量门兜底</span>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="layer">
+      <div class="ln">3</div>
+      <div class="info"><div class="t">存储层 · Storage</div><div class="d">SQLite(WAL) + vec0 向量表 · FTS5 全文索引 · FSRS 状态列 · 单文件备份</div></div>
+      <span class="sci">Local-first · 数据不出设备</span>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="layer">
+      <div class="ln">4</div>
+      <div class="info"><div class="t">网络层 · Knowledge Graph</div><div class="d">9 类命题边 · 前提 DAG（KST）· 建议箱确认 · 孤儿检测 · 递归 CTE 图查询</div></div>
+      <span class="sci">Novak 命题 · 同化理论 · KST</span>
+    </div>
+    <div class="arrow">▼</div>
+    <div class="layer" style="border-color:var(--ok);">
+      <div class="ln" style="background:var(--ok);">5</div>
+      <div class="info"><div class="t">生长层 · Growth Engine</div><div class="d">FSRS 每日回取（提示先行）· 每周社区综合 · 冲突检测报告 · 指标面板</div></div>
+      <span class="sci" style="background:var(--ok-soft);color:var(--ok);">★ 核心壁垒</span>
+    </div>
+    <div class="loop">⟲ 生长回环：回取反馈 → FSRS 参数更新；综合产物 → 作为新节点（source=综合）挂回图；冲突解决 → 新增/修正边。网络因"使用"而生长，而非因"堆积"而膨胀。</div>
+  </div>
+</section>
+
+<!-- 技术选型 -->
+<section id="stack">
+  <h2><span class="no">5</span>技术选型</h2>
+  <div class="sec-desc">每个选择都标注了备选与理由。总体原则：本地优先、单机可跑、生态成熟、可迁移。</div>
+  <div class="card">
+    <table>
+      <tr><th style="width:130px;">模块</th><th style="width:230px;">MVP 选型</th><th>备选</th><th>选择理由</th></tr>
+      <tr><td>运行时 / 后端</td><td><b>Python 3.12 + FastAPI + uvicorn</b></td><td>Node.js</td><td>LLM / 向量 / FSRS 的 Python 生态最全，你已熟悉；FastAPI 异步适合本地服务</td></tr>
+      <tr><td>存储</td><td><b>SQLite 3.45+（WAL）+ sqlite-vec</b></td><td>LanceDB / DuckDB</td><td>单文件本地优先；sqlite-vec 为 SQLite 向量扩展（C 实现、零依赖），10 万级向量亚百毫秒；vec0 虚拟表与业务表同库，事务一致</td></tr>
+      <tr><td>图查询</td><td><b>SQLite 递归 CTE</b>（WITH RECURSIVE）</td><td>networkx 离线分析；Neo4j（超阈值再上）</td><td>MVP 节点 &lt;10⁵ 完全够用，零运维、单文件备份；迁移触发器明确</td></tr>
+      <tr><td>Embedding</td><td><b>BGE-M3</b>（FlagEmbedding，本地，1024 维，稠密+稀疏）</td><td>OpenAI text-embedding-3-small</td><td>中文检索强、可本地部署（CPU 可跑、约 4GB 内存）、隐私合规；稀疏检索提升去重精度</td></tr>
+      <tr><td>LLM</td><td><b>DeepSeek-V3 / Qwen API</b>（默认云端）</td><td>Ollama + Qwen2.5（全本地模式）</td><td>成本低、中文质量好；隐私分级：敏感源强制走本地模型</td></tr>
+      <tr><td>间隔重复</td><td><b>FSRS</b>（开源，Anki 已集成的现代算法）</td><td>SM-2 自实现</td><td>机器学习参数化记忆模型，优于 30 年历史的 SM-2；有公开实现与参数优化工具</td></tr>
+      <tr><td>采集（文本）</td><td><b>Chrome/Edge 扩展 + 剪贴板守护 + 飞书开放平台 API</b></td><td>微信收藏（转发到文件传输助手，手动导入）</td><td>三个都是你的日常高频源；扩展与剪贴板零成本，飞书走 API 全自动</td></tr>
+      <tr><td>采集（链接）</td><td><b>trafilatura（静态正文提取）+ Playwright（动态页面兜底）</b></td><td>readability</td><td>trafilatura 提取正文与元数据更稳；B站/小红书等 JS 渲染页面用无头浏览器兜底；剪贴板守护自动识别 URL 路由到此</td></tr>
+      <tr><td>采集（音频）</td><td><b>FunASR / SenseVoice（本地 ASR，中文优化）</b></td><td>faster-whisper；云端：火山引擎/豆包语音识别</td><td>中文会议/口述转写效果好；本地跑保证录音隐私（音频是最敏感数据）；支持上传与录音设备导入</td></tr>
+      <tr><td>采集（手写）</td><td><b>PaddleOCR（本地，中文手写识别）→ 多模态 LLM 兜底</b></td><td>云端 OCR API</td><td>开源本地可跑；中文手写误差高 → 置信度分级 + 人工校对回路；低置信直接进草稿箱</td></tr>
+      <tr><td>前端</td><td><b>Vue3 + Vite 本地单页</b>（图谱视图 + 回取界面 + 建议箱）</td><td>先 FastAPI + Jinja2 最小面板</td><td>图谱可视化（节点/边/反链）需要前端；不追求首发即美，功能优先</td></tr>
+      <tr><td>调度</td><td><b>APScheduler 常驻进程</b></td><td>cron + 脚本</td><td>每日回取、每周综合、建链批处理统一调度，支持任务内状态</td></tr>
+      <tr><td>搜索</td><td><b>FTS5（全文）+ vec0（语义）双路召回</b></td><td>—</td><td>精确词匹配 + 语义相似互补，召回质量是建链引擎的地基</td></tr>
+    </table>
+  </div>
+
+  <div class="callout">
+    <b>关键架构决策：</b>① <b>不引入 Neo4j</b>——本地优先 + 单机规模下是过度设计；迁移触发器：节点 &gt;10⁵ 或需要高频图算法时。② <b>Embedding 必须本地</b>——向量是知识网络的地基，绝不能把全部笔记内容上传第三方。③ <b>LLM 与 Embedding 分层</b>——Embedding 永远本地；LLM 按源分级（网页=云端可接受，IM/聊天=本地）。
+  </div>
+</section>
+
+<!-- 建链引擎 -->
+<section id="linking">
+  <h2><span class="no">6</span>建链引擎（科学建链流水线）</h2>
+  <div class="sec-desc">这是"科学依据"的工程化落地：每一步都有明确规则、置信度门控和人工兜底。</div>
+  <div class="card">
+    <h3>6.1 流水线</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:10px;">前置归一化：所有输入——网页正文、ASR 转写文本、OCR 识别文本、剪贴板片段——在进入本流水线前已统一为同一形态的<b>文本中间态</b>，因此建链规则对所有模态完全一致，知识网络的结构不因来源是音频还是手写而改变。</p>
+    <ol>
+      <li><b>召回</b>：新节点入库 → 本地 BGE-M3 编码 → vec0 相似召回 Top-20；FTS5 关键词召回 Top-10；并集去重</li>
+      <li><b>规则层</b>：实体共现（概念名精确匹配）、同源文档内建链、标题/标签命中——规则命中直接生成候选</li>
+      <li><b>LLM 命题判定</b>：对每个候选对，LLM 输出结构化 JSON：<code>{rel_type, confidence(0–1), rationale(一句话理由)}</code>；候选对 &lt;9 类之一或无法判定 → 返回 null 丢弃</li>
+      <li><b>门控</b>：confidence ≥0.85 → 自动入图（可在界面一键撤回）；0.5–0.85 → 建议箱待确认；&lt;0.5 → 丢弃并记日志</li>
+      <li><b>前提 DAG 校验</b>：prerequisite_of 边写入前做环检测，成环则降级为 relates 并告警（KST 一致性要求）</li>
+      <li><b>孤儿规则</b>：入库 48h 仍无边 → 标记"待连接"，进入每周综合任务的优先处理队列；30 天仍孤立 → 提示合并或归档</li>
+    </ol>
+    <h3>6.2 人工在环</h3>
+    <ul>
+      <li>建议箱每周确认一次（约 15 分钟），操作：接受 / 拒绝 / 改类型；</li>
+      <li>所有人工操作记录为样本，周期性（每 2 周）用于改进 LLM 判定提示词；</li>
+      <li>图谱视图支持任意节点的出链/反链/邻域展开，人工可随时补链——补链即最高优先级入图。</li>
+    </ul>
+    <div class="callout warn" style="margin-top:14px;">
+      <b>防"假链接"红线：</b>embedding 相似 ≠ 知识关系。向量相似只负责<b>召回候选</b>，最终成链必须由命题判定给出可解释的 rel_type + rationale。这条红线直接来自 Novak 命题观与"拒绝随意连线"的原则。
+    </div>
+  </div>
+</section>
+
+<!-- 生长机制 -->
+<section id="growth">
+  <h2><span class="no">7</span>生长机制（系统的核心价值层）</h2>
+  <div class="sec-desc">三个机制 + 一个面板。设计原则：回取是推送不是打卡，综合是产出不是报表。</div>
+  <div class="grid2">
+    <div class="card" style="margin-top:0;">
+      <h3>每日回取（5 分钟）</h3>
+      <ul>
+        <li>FSRS 到期节点 → 卡片队列，先显示标题 + 提示（检索练习），作答后展开正文对照</li>
+        <li>自评：记住 / 模糊 / 忘记 → 写回 FSRS 更新难度与稳定性</li>
+        <li>忘记的节点 → 触发"重读 + 重新精炼"（进入草稿箱二次加工）</li>
+        <li>连续答对 → 拉长间隔（合意困难，防熟练感假象）</li>
+      </ul>
+    </div>
+    <div class="card" style="margin-top:0;">
+      <h3>每周综合（30 分钟）</h3>
+      <ul>
+        <li>图社区检测（Louvain 或高频共现）→ 选出密度最高的社区</li>
+        <li>LLM 基于社区内全部节点生成综述 / 提炼新主张（GraphRAG 思路）</li>
+        <li>综合产物作为<b>新节点</b>（source=综合）挂回图，并链接社区代表节点</li>
+        <li>综合产出数 = 网络"真正生长"的直接证据，写进指标面板</li>
+      </ul>
+    </div>
+    <div class="card" style="margin-top:0;">
+      <h3>冲突检测</h3>
+      <ul>
+        <li>contradicts 边落库时生成"矛盾报告"：双方主张 + 各自证据链</li>
+        <li>可选动作：保持并存（标注未决）/ 触发定向检索 / 删除一方</li>
+        <li>解决结果记录在边上，形成"知识演化历史"</li>
+      </ul>
+    </div>
+    <div class="card" style="margin-top:0;">
+      <h3>指标面板</h3>
+      <ul>
+        <li>结构：节点数 / 边数 / 链接密度 / 孤儿率 / 图直径 / 中心性</li>
+        <li>行为：回取完成率 / FSRS 稳定性趋势 / 遗忘率</li>
+        <li>产出：每周综合篇数 / 综合节点被引用次数</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 路线图 -->
+<section id="roadmap">
+  <h2><span class="no">8</span>落地路线图（10 周）</h2>
+  <div class="sec-desc">每个阶段有明确的交付物与验收标准，周与周之间可独立验证，任何一周卡住不阻塞后续并行工作。音频源（Phase 1b）与手写源（Phase 1c）可与 Phase 2 建链开发并行推进。</div>
+  <div class="card">
+    <table>
+      <tr><th style="width:70px;">阶段</th><th style="width:110px;">时间</th><th style="width:220px;">交付物</th><th>验收标准</th></tr>
+      <tr>
+        <td><span class="tag blue">Phase 0</span></td><td><b>W1</b></td>
+        <td>仓库骨架 · 三表 schema + vec0 · FSRS 集成 · 采集队列抽象（含多模态源接口）</td>
+        <td>单测通过；CLI 可增删节点/边；向量写入与相似查询可用；FSRS 到期计算正确</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 1a</span></td><td><b>W2–3</b></td>
+        <td>文本与链接源：Chrome 扩展 · 剪贴板（含 URL 自动识别）· 飞书 API · trafilatura + Playwright 提取 · LLM 原子化 · 质量门 · 入库</td>
+        <td>4 类源真实采集 → ≥100 条原子笔记入库；链接提取成功率 ≥80%；去重拦截率 ≥90%；草稿箱可回看</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 1b</span></td><td><b>W4</b></td>
+        <td>音频源：录音导入 / 上传 · FunASR 本地转写 · 转写文本走统一流水线总结入图 · 录音文件归档</td>
+        <td>≥10 段录音完成"转写 → 原子笔记"闭环；转写错字率在可接受范围；可标记 source=audio 回查原文</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 1c</span></td><td><b>W5</b></td>
+        <td>手写源：拍照/扫描/上传 · PaddleOCR 识别 · 置信度分级 + 人工校对 · 总结入图 · 原图归档</td>
+        <td>≥10 页手写笔记完成"识别 → 校对 → 原子笔记"闭环；校对接受率 ≥80%；低置信页直接进校对队列</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 2</span></td><td><b>W6–7</b></td>
+        <td>建链引擎（召回+判定+门控）· 建议箱 UI · 图谱视图（出链/反链/邻域）· 孤儿规则</td>
+        <td>链接密度 ≥1.0；建议箱可完成确认闭环；前提 DAG 环检测生效；图谱视图可交互</td>
+      </tr>
+      <tr>
+        <td><span class="tag blue">Phase 3</span></td><td><b>W8–9</b></td>
+        <td>每日回取队列 UI · FSRS 到期推送 · 每周综合任务 · 冲突检测 · 指标面板</td>
+        <td>连续 7 天回取可跑通；首篇综合产出入库并被引用；指标面板数据正确</td>
+      </tr>
+      <tr>
+        <td><span class="tag green">Phase 4</span></td><td><b>W10</b></td>
+        <td>30 天指标复盘 · 决策源 #7+（微信收藏 / PDF / 视频笔记 / 邮件）</td>
+        <td>对照 §9 KPI 逐项验收；未达标项给出根因与修正动作；源 #7+ 适配器进入排期</td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<!-- KPI -->
+<section id="kpi">
+  <h2><span class="no">9</span>30 天验收指标</h2>
+  <div class="sec-desc">指标分三类：结构健康、行为巩固、产出价值。全部为目标值（非行业基准），用于判断 MVP 是否成立。</div>
+  <div class="grid2">
+    <div class="kpi"><div class="num">≥400</div><div class="lbl">节点总数</div><div class="note">其中原子笔记（claim/concept）占比 ≥80%，source 类节点不计入主体</div></div>
+    <div class="kpi"><div class="num">≥2.0</div><div class="lbl">链接密度（边数 / 节点数）</div><div class="note">低于此值说明建链引擎未生效，网络仍是孤岛集合</div></div>
+    <div class="kpi"><div class="num">&lt;20%</div><div class="lbl">孤儿节点率</div><div class="note">入库 48h 后仍无边；孤儿率高 = 同化机制失效</div></div>
+    <div class="kpi"><div class="num">≥30%</div><div class="lbl">周回取完成率</div><div class="note">北极星指标。回取是生长的燃料，完成率过低则知识网络只是仓库</div></div>
+    <div class="kpi"><div class="num">≥1 篇 / 周</div><div class="lbl">综合产出</div><div class="note">且综合节点被后续笔记引用 ≥1 次，证明产出真实有用</div></div>
+    <div class="kpi"><div class="num">0 泄露</div><div class="lbl">隐私事故</div><div class="note">敏感源（录音、手写、IM）数据零出本机（日志审计确认）；云端 LLM 仅处理白名单源</div></div>
+    <div class="kpi"><div class="num">≥80%</div><div class="lbl">链接提取成功率</div><div class="note">可提取到正文的链接 / 全部链接；动态页由 Playwright 兜底，失败时保留链接+标题并标记</div></div>
+    <div class="kpi"><div class="num">≥10 段 / 月</div><div class="lbl">音频转写闭环</div><div class="note">完成"录音 → 转写 → 原子笔记"的闭环数量；累计产出原子笔记 ≥30 条</div></div>
+    <div class="kpi"><div class="num">≥10 页 / 月</div><div class="lbl">手写识别闭环</div><div class="note">完成"拍照 → OCR → 校对 → 原子笔记"的闭环数量；校对接受率 ≥80%</div></div>
+  </div>
+</section>
+
+<!-- 风险 -->
+<section id="risk">
+  <h2><span class="no">10</span>风险与对策</h2>
+  <div class="card">
+    <table>
+      <tr><th style="width:170px;">风险</th><th>等级</th><th>对策</th></tr>
+      <tr><td>隐私泄露（全设备数据聚合）</td><td><span class="tag red">高</span></td><td>Local-first 架构；敏感源（IM/聊天/录音/手写）强制本地模型；导出加密；白名单机制控制云端调用</td></tr>
+      <tr><td>音频隐私（录音/语音是最敏感数据）</td><td><span class="tag red">高</span></td><td>ASR 默认本地（FunASR/SenseVoice）；录音文件本地归档并可加密；云端转写需显式逐条授权</td></tr>
+      <tr><td>采集源 API 变更 / 失效</td><td><span class="tag red">高</span></td><td>统一采集队列 + 适配器模式；单源失效不影响其他源；扩展与剪贴板源不受第三方 API 约束</td></tr>
+      <tr><td>链接抓取反爬 / 平台限制</td><td><span class="tag red">高</span></td><td>trafilatura + Playwright 多级降级；抓取失败保留链接与标题并标记"待处理"，不静默丢弃；遵守 robots 与平台规则</td></tr>
+      <tr><td>手写识别质量（中文手写误差高）</td><td><span class="tag blue">中</span></td><td>OCR 置信度分级：低置信直接进人工校对队列；校对记录回流优化识别与 LLM 纠错提示词</td></tr>
+      <tr><td>LLM 摘要质量（同质化/浅层化）</td><td><span class="tag red">高</span></td><td>质量门 + 草稿箱；提示词版本管理；人工确认样本每两周回流优化</td></tr>
+      <tr><td>只存不用（用户粘性）</td><td><span class="tag red">高</span></td><td>回取是推送式（每日 5 分钟）；综合产出可见；指标面板展示生长成果</td></tr>
+      <tr><td>图谱膨胀 / 链接劣化</td><td><span class="tag blue">中</span></td><td>孤儿回收；merges 合并；30 天孤立节点归档；链接密度上限告警</td></tr>
+      <tr><td>单一依赖（sqlite-vec 维护状态）</td><td><span class="tag blue">中</span></td><td>向量列可通过存储抽象迁移 LanceDB；schema 与业务代码解耦</td></tr>
+      <tr><td>FSRS 参数未优化</td><td><span class="tag blue">低</span></td><td>FSRS 官方提供基于复习日志的参数优化工具，30 天后用真实数据训练</td></tr>
+    </table>
+  </div>
+</section>
+
+<div class="foot">
+  <p><b>版本与说明：</b>本方案 v1.1（2026-09-07，在 v1.0 基础上新增音频、手写、链接三类采集源，路线图扩展至 10 周）。科学理论引用均为领域公认文献（Ausubel 1968；Novak &amp; Gowin 1984；Doignon &amp; Falmagne 1999；Roediger &amp; Butler 2011；Bjork 1994；Microsoft GraphRAG 2024）。技术组件均已核验存在且可用：FSRS 为开源间隔重复算法、已被 Anki 集成；sqlite-vec 为 SQLite 向量检索扩展（单文件、C 实现）；BGE-M3 为 BAAI 开源多语言 embedding 模型（可本地 CPU 部署）。</p>
+  <p>指标均为本项目目标值，非行业基准。落地时以各组件官方仓库文档为准。</p>
+</div>
+
+</div>
+</body>
+</html>
