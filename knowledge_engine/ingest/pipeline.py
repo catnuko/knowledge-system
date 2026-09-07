@@ -58,11 +58,3 @@ def ingest_audio(con, path: str, provider=None, cfg: Config | None = None) -> di
     text = transcribe_audio(path)
     title = path.rsplit("/", 1)[-1]
     return ingest_text(con, text, kind="audio", title=title, raw_path=path, provider=provider, cfg=cfg)
-
-
-def ingest_handwritten(con, path: str, provider=None, cfg: Config | None = None) -> dict:
-    """手写采集：OCR 识别 → 统一流水线。"""
-    from .audio import ocr_handwritten
-    text = ocr_handwritten(path)
-    title = path.rsplit("/", 1)[-1]
-    return ingest_text(con, text, kind="handwritten", title=title, raw_path=path, provider=provider, cfg=cfg)

@@ -1,61 +1,31 @@
 # Knowledge System · 个人知识系统
 
-多源采集（文本 / 链接 / 音频 / 手写）→ AI 原子化 → 依据知识科学理论构建持续生长的个人知识网络。
+多源采集（文本 / 链接 / 音频）→ AI 原子化 → 依据知识科学理论构建持续生长的个人知识网络。
 
-## 当前状态：MVP v0.2 — 服务化可用
+## 当前状态：MVP v0.1 已可运行
 
-**日常使用方式 = 启动一个后端服务，用浏览器操作**。CLI 仅为高级调试保留。
+本地优先、单文件 SQLite（含向量检索与全文索引）的知识网络引擎。**无需任何 API key 即可跑通完整闭环**：采集 → 原子化 → 科学建链 → 间隔重复回取 → 综合 → 冲突检测。
 
-四种采集入口（网页界面）：粘贴文本、粘贴链接自动提取、上传音频自动转写、上传手写图片自动识别。
-本地优先、单文件 SQLite（含向量检索与全文索引）。**无需任何 API key 即可跑通完整闭环**：采集 → 原子化 → 科学建链 → 间隔重复回取 → 综合 → 冲突检测。
-
-## 快速开始（两步）
+## 快速开始
 
 ```bash
-cd knowledge-system
-./start.sh                # 第一步：启动服务（首次自动安装依赖）
-# 第二步：浏览器打开 http://127.0.0.1:8000
-```
+pip install -e .            # 安装依赖（sqlite-vec / fsrs / trafilatura / jieba / fastapi）
 
-Web 面板包含：知识图谱（ECharts 力导向图）、采集（文本/链接/音频/手写）、间隔重复回取评分、建议箱（边确认）、矛盾处理、每周综合、指标条。
-
-> 音频转写（FunASR）与手写识别（PaddleOCR）首次使用时自动下载本地模型（约 1GB / 15MB），之后离线可用。
-
-## 服务架构
-
-```
-┌────────────────────────────────────────────┐
-│  浏览器（前端：图谱 / 采集 / 回取 / 建议箱）  │
-└──────────────▲─────────────────────────────┘
-               │ HTTP /api/*
-┌──────────────┴─────────────────────────────┐
-│  后端服务（FastAPI，./start.sh 启动）        │
-│  采集: 文本 / URL提取 / 音频ASR / 手写OCR    │
-│  加工: 原子化 → 去重 → 质量门               │
-│  建链: 召回 → 命题判定 → 门控 → 前提DAG      │
-│  生长: FSRS回取 / 每周综合 / 冲突检测        │
-└──────────────┬─────────────────────────────┘
-               │ SQLite (vec0 + FTS5 + 递归CTE)
-        ~/.knowledge_engine/ke.db
-```
-
-## CLI（高级调试，日常不需要）
-
-```bash
-pip install -e .
-ke ingest-text "文本"        # 采集文本
-ke ingest-url <链接>          # 采集链接
-ke ingest-file notes.md      # 采集文件
-ke ingest-audio a.wav        # 采集音频（需 FunASR）
-ke ingest-handwritten a.png  # 采集手写（需 PaddleOCR）
-ke link --all                # 建链
-ke recall / ke review 1 good # 回取
-ke synthesize / ke conflicts / ke stats
+ke ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率" --title "间隔重复"
+ke ingest-file notes.md     # 本地文件
+ke ingest-url https://www.ruanyifeng.com/blog/...   # 网页提取（trafilatura）
+ke link --all               # 建链：自动边 + 建议箱 + 孤儿标记
+ke recall                   # 今日到期回取卡片
+ke review 1 good            # 评分：again / hard / good / easy
+ke synthesize               # 每周综合（连通分量 → 综述 → 新节点挂回图）
+ke conflicts                # 矛盾检测报告
+ke stats                    # 指标面板
+ke serve --port 8000        # Web 面板（图谱 / 采集 / 回取 / 建议箱 / 矛盾）
 ```
 
 ## 核心思想
 
-- **采集不是壁垒**：6 类源（浏览器、剪贴板、飞书、链接提取、音频转写、手写识别）通过适配器模式增量扩展，多模态输入统一为"文本中间态"
+- **采集不是壁垒**：5 类源（浏览器、剪贴板、飞书、链接提取、音频转写）通过适配器模式增量扩展，多模态输入统一为"文本中间态"
 - **科学建链**：网络 = 原子节点 + 9 类命题化有向边 + 前提 DAG，每条边可解释、可审计，拒绝"相似就拉线"
 - **生长是主引擎**：FSRS 每日回取 + 每周社区综合 + 冲突检测，北极星指标是回取率而非存储量
 
@@ -69,9 +39,16 @@ ke synthesize / ke conflicts / ke stats
 | 检索练习 + FSRS | 按遗忘曲线调度回取，提示先行 |
 | GraphRAG | 每周基于图社区做综合产出 |
 
+## 架构（五层 + 生长回环）
+
+```
+采集层  →  加工层  →  存储层  →  建链层  →  生长层
+文本/文件/URL/音频  |  原子化/去重/质量门  |  SQLite+vec0+FTS5  |  召回/判定/门控/DAG  |  FSRS/综合/冲突/指标
+```
+
 ## 数据模型
 
-- `sources` — 原始材料（kind: url/clipboard/message/file/audio/handwritten/synthesis + 指纹去重）
+- `sources` — 原始材料（kind: url/clipboard/message/file/audio/synthesis + 指纹去重）
 - `nodes` — 原子笔记（concept/claim/question + FSRS 记忆状态）
 - `edges` — 9 类命题边（implies/supports/contradicts/exemplifies/refines/prerequisite_of/contrasts/merges/relates）
 - `node_vec`（vec0 向量 KNN）+ `node_fts`（trigram 全文）— 双路召回
@@ -101,7 +78,8 @@ pip install torch transformers          # CPU 版 torch：pip install torch --in
 # 首次调用自动从 HuggingFace 下载 BAAI/bge-small-zh-v1.5（约 100MB），
 # 国内网络可设置 HF_ENDPOINT=https://hf-mirror.com
 export KE_EMBEDDING=bge
-./start.sh
+ke ingest-text "..."
+ke link --all
 ```
 
 > 注意：切换 embedding 后端后向量语义不同，建议清空重建知识库（`rm ~/.knowledge_engine/ke.db*`）。
@@ -110,18 +88,35 @@ export KE_EMBEDDING=bge
 
 ```bash
 export KE_LLM=openai KE_LLM_KEY=sk-xxx KE_LLM_BASE=https://api.deepseek.com/v1 KE_LLM_MODEL=deepseek-chat
-./start.sh
+```
+
+### 音频源（接口已预留）
+
+```bash
+pip install funasr modelscope    # 音频转写（中文优化，本地推理）
 ```
 
 ## 测试
 
 ```bash
-python -m pytest tests/ -q        # 存储/流水线/建链/回取
+python -m pytest tests/ -q        # 11 个用例：存储/流水线/建链/回取
 ```
 
 ## 文档
 
 - `docs/knowledge-system-mvp-plan.html` — MVP 架构与落地方案 v1.1（技术选型、建链引擎、生长机制、10 周路线图、30 天验收指标、风险对策）
+
+## 打包：桌面端 / Web 端
+
+同一份前端（`knowledge_engine/web/static/`），三种形态：
+
+| 形态 | 方式 | 说明 |
+|---|---|---|
+| Web（零配置） | `ke serve --port 8000` | 后端直接托管面板 |
+| Web（静态部署） | `bash web/build.sh` | 产出 `web/dist/`，Nginx/CDN 托管，`/api` 反代后端（见 `web/deploy.example.conf`） |
+| 桌面端（Tauri v2） | `cd desktop && npm install && npm run tauri:dev` | 壳自动拉起本地后端并加载面板；平台差异配置按文件夹拆分于 `desktop/src-tauri/configs/{windows,linux,macos}/` |
+
+桌面端与 Web 端共用同一份面板代码，桌面端详情见 `desktop/README.md`。
 
 ## 路线图（10 周）
 
@@ -129,8 +124,7 @@ python -m pytest tests/ -q        # 存储/流水线/建链/回取
 |---|---|
 | Phase 0（W1） | 数据模型 schema + vec0 + FSRS + 采集队列抽象 |
 | Phase 1a（W2-3） | 文本与链接源：浏览器扩展 / 剪贴板 / 飞书 / URL 提取 |
-| Phase 1b（W4） | 音频源：FunASR 本地转写 → 总结入图（✅ 已落地） |
-| Phase 1c（W5） | 手写源：PaddleOCR 识别 → 校对 → 总结入图（✅ 已落地） |
+| Phase 1b（W4） | 音频源：FunASR 本地转写 → 总结入图 |
 | Phase 2（W6-7） | 建链引擎 + 建议箱 + 图谱视图 |
 | Phase 3（W8-9） | 回取队列 + 每周综合 + 冲突检测 + 指标面板 |
 | Phase 4（W10） | 30 天复盘 + 扩展源 #7+ |

@@ -15,7 +15,7 @@ REL_TYPES = (
 )
 NODE_STATUS = ("draft", "active", "archived", "pending_link")
 CONFIRM_STATUS = ("auto", "pending", "approved", "rejected")
-SOURCE_KINDS = ("url", "clipboard", "message", "file", "audio", "handwritten", "synthesis")
+SOURCE_KINDS = ("url", "clipboard", "message", "file", "audio", "synthesis")
 
 
 class RecallState(BaseModel):

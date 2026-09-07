@@ -1,0 +1,17 @@
+{
+  "name": "knowledge-engine-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "knowledge-engine 桌面端（Tauri v2 壳 + 本地 Python 后端）",
+  "scripts": {
+    "tauri:dev": "tauri dev",
+    "tauri:build": "node scripts/build-platform.mjs",
+    "tauri:build:windows": "tauri build --config src-tauri/configs/windows/tauri.windows.conf.json",
+    "tauri:build:linux": "tauri build --config src-tauri/configs/linux/tauri.linux.conf.json",
+    "tauri:build:macos": "tauri build --config src-tauri/configs/macos/tauri.macos.conf.json",
+    "tauri:icon": "tauri icon"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

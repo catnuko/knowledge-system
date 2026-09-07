@@ -11,7 +11,7 @@ from .embed import embed
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind TEXT NOT NULL CHECK (kind IN ('url','clipboard','message','file','audio','handwritten','synthesis')),
+    kind TEXT NOT NULL CHECK (kind IN ('url','clipboard','message','file','audio','synthesis')),
     raw_path TEXT NOT NULL DEFAULT '',
     text_extracted TEXT NOT NULL DEFAULT '',
     fingerprint TEXT NOT NULL DEFAULT '',

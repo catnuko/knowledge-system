@@ -67,7 +67,7 @@
   </section>
 
   <section class="card">
-    <h2>采集 <span style="font-weight:400;color:var(--muted);font-size:12px;">文本 / 链接 / 音频 / 手写</span></h2>
+    <h2>采集 <span style="font-weight:400;color:var(--muted);font-size:12px;">文本 / 链接 / 音频</span></h2>
     <textarea id="ingest-text" placeholder="粘贴文本 / 笔记摘录…"></textarea>
     <div class="row">
       <input type="text" id="ingest-url" placeholder="粘贴链接，自动提取正文（公众号/博客/文档…）" style="flex:1;min-width:140px;">
@@ -75,7 +75,6 @@
     </div>
     <div class="row">
       <label class="up"><input type="file" id="ingest-audio" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.wma" onchange="doIngestAudio(this)">上传音频 · 自动转写</label>
-      <label class="up"><input type="file" id="ingest-hand" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp" onchange="doIngestHand(this)">上传手写图 · OCR</label>
     </div>
     <div class="row">
       <input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;min-width:140px;">
@@ -172,12 +171,6 @@ async function uploadIngest(file, endpoint, doingMsg){
 async function doIngestAudio(input){
   const f = input.files && input.files[0]; if(!f) return;
   await uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…');
-  input.value='';
-}
-
-async function doIngestHand(input){
-  const f = input.files && input.files[0]; if(!f) return;
-  await uploadIngest(f, '/api/ingest/handwritten', '手写识别中，首次使用需下载模型，请稍候…');
   input.value='';
 }
 

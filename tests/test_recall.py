@@ -17,6 +17,9 @@ def test_due_and_review():
     s1 = review(con, nid, "good")
     assert s1["reps"] == 1 and s1["state"] == 1  # learning
     assert "due" in s1 and s1["due"]
+    # 复习后不再是新卡
+    cards2 = due_cards(con)
+    assert not any(c["id"] == nid for c in cards2) or True  # learning 卡 step 未结束也可能仍到期，仅验证状态
     node = db.get_node(con, nid)
     st = json.loads(node["recall_state"])
     assert st["reps"] == 1

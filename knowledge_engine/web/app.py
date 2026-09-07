@@ -1,4 +1,4 @@
-"""FastAPI Web 面板：图谱、采集（文本/链接/音频/手写）、回取、建议箱、矛盾、综合。"""
+"""FastAPI Web 面板：图谱、采集（文本/链接/音频）、回取、建议箱、矛盾、综合。"""
 import tempfile
 from pathlib import Path
 
@@ -135,22 +135,6 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         try:
             provider = get_provider(cfg)
             return ingest_audio(con, path, provider=provider, cfg=cfg)
-        except RuntimeError as e:
-            raise HTTPException(422, str(e))
-        finally:
-            Path(path).unlink(missing_ok=True)
-            con.close()
-
-    @app.post("/api/ingest/handwritten")
-    async def api_ingest_handwritten(file: UploadFile = File(...)):
-        from ..ingest.pipeline import ingest_handwritten
-        if not (file.filename or "").lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".webp")):
-            raise HTTPException(400, "仅支持图片文件：png/jpg/jpeg/bmp/webp")
-        path = await _save_upload(file)
-        con = _con()
-        try:
-            provider = get_provider(cfg)
-            return ingest_handwritten(con, path, provider=provider, cfg=cfg)
         except RuntimeError as e:
             raise HTTPException(422, str(e))
         finally:

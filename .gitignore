@@ -14,9 +14,19 @@ knowledge_engine/web/static/lib/
 *.db-shm
 models/
 
-# 本地测试素材
-/.testdata/
-
 # 环境
 .env
 .venv/
+/.testdata/
+
+# 桌面端（Tauri）构建产物
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/backend-dist/
+desktop/src-tauri/gen/
+
+# web 静态打包产物
+web/dist/
+
+# 后端日志
+*.log
