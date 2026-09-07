@@ -1,0 +1,19 @@
+# 本地数据与缓存（不入库）
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# 第三方前端依赖（离线部署时自行放置，缺失时 Web 端自动回退 CDN）
+knowledge_engine/web/static/lib/
+
+# 知识库数据与模型（个人数据，勿提交）
+~/.knowledge_engine/
+*.db
+*.db-wal
+*.db-shm
+models/
+
+# 环境
+.env
+.venv/
