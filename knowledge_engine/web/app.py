@@ -1,7 +1,8 @@
-"""FastAPI Web 面板：图谱、采集、回取、建议箱、矛盾、综合。"""
+"""FastAPI Web 面板：图谱、采集（文本/链接/音频/手写）、回取、建议箱、矛盾、综合。"""
+import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -17,6 +18,10 @@ class IngestIn(BaseModel):
     text: str
     title: str = ""
     kind: str = "clipboard"
+
+
+class IngestUrlIn(BaseModel):
+    url: str
 
 
 class ReviewIn(BaseModel):
@@ -97,6 +102,59 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             provider = get_provider(cfg)
             return ingest_text(con, body.text, kind=body.kind, title=body.title, provider=provider, cfg=cfg)
         finally:
+            con.close()
+
+    @app.post("/api/ingest/url")
+    def api_ingest_url(body: IngestUrlIn):
+        from ..ingest.pipeline import ingest_url
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return ingest_url(con, body.url, provider=provider, cfg=cfg)
+        except (RuntimeError, FileNotFoundError) as e:
+            raise HTTPException(422, str(e))
+        finally:
+            con.close()
+
+    async def _save_upload(file: UploadFile) -> str:
+        """保存上传文件到临时目录，返回路径。"""
+        suffix = Path(file.filename or "upload").suffix or ".bin"
+        fd, path = tempfile.mkstemp(prefix="ke_upload_", suffix=suffix)
+        with open(fd, "wb") as f:
+            while chunk := await file.read(1024 * 1024):
+                f.write(chunk)
+        return path
+
+    @app.post("/api/ingest/audio")
+    async def api_ingest_audio(file: UploadFile = File(...)):
+        from ..ingest.pipeline import ingest_audio
+        if not (file.filename or "").lower().endswith((".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".wma")):
+            raise HTTPException(400, "仅支持音频文件：wav/mp3/m4a/ogg/flac/aac/wma")
+        path = await _save_upload(file)
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return ingest_audio(con, path, provider=provider, cfg=cfg)
+        except RuntimeError as e:
+            raise HTTPException(422, str(e))
+        finally:
+            Path(path).unlink(missing_ok=True)
+            con.close()
+
+    @app.post("/api/ingest/handwritten")
+    async def api_ingest_handwritten(file: UploadFile = File(...)):
+        from ..ingest.pipeline import ingest_handwritten
+        if not (file.filename or "").lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".webp")):
+            raise HTTPException(400, "仅支持图片文件：png/jpg/jpeg/bmp/webp")
+        path = await _save_upload(file)
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return ingest_handwritten(con, path, provider=provider, cfg=cfg)
+        except RuntimeError as e:
+            raise HTTPException(422, str(e))
+        finally:
+            Path(path).unlink(missing_ok=True)
             con.close()
 
     @app.get("/api/recall")
