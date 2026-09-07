@@ -36,6 +36,10 @@
   button:hover { opacity:.85; }
   button.sm { padding:4px 10px; font-size:12px; }
   button.gray { background:#ECEAF3; color:#444; }
+  .up { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border:1px dashed var(--border);
+        border-radius:8px; background:#FAFAF7; color:#444; font-size:13px; cursor:pointer; }
+  .up:hover { border-color:var(--accent); color:#123; }
+  .up input[type=file] { display:none; }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
   .item { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; }
   .item .t { font-weight:600; font-size:13px; }
@@ -63,11 +67,19 @@
   </section>
 
   <section class="card">
-    <h2>采集</h2>
-    <textarea id="ingest-text" placeholder="粘贴文本 / 链接正文 / 笔记摘录…"></textarea>
+    <h2>采集 <span style="font-weight:400;color:var(--muted);font-size:12px;">文本 / 链接 / 音频 / 手写</span></h2>
+    <textarea id="ingest-text" placeholder="粘贴文本 / 笔记摘录…"></textarea>
+    <div class="row">
+      <input type="text" id="ingest-url" placeholder="粘贴链接，自动提取正文（公众号/博客/文档…）" style="flex:1;min-width:140px;">
+      <button onclick="doIngestUrl()">提取</button>
+    </div>
+    <div class="row">
+      <label class="up"><input type="file" id="ingest-audio" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.wma" onchange="doIngestAudio(this)">上传音频 · 自动转写</label>
+      <label class="up"><input type="file" id="ingest-hand" accept="image/*,.png,.jpg,.jpeg,.bmp,.webp" onchange="doIngestHand(this)">上传手写图 · OCR</label>
+    </div>
     <div class="row">
       <input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;min-width:140px;">
-      <button onclick="doIngest()">采集并入库</button>
+      <button onclick="doIngest()">文本入库</button>
     </div>
     <div class="row"><button class="gray" onclick="doLink()">执行建链（未链接节点）</button></div>
   </section>
@@ -137,6 +149,36 @@ async function doIngest(){
     $('#ingest-text').value=''; $('#ingest-title').value='';
     await Promise.all([loadStats(),loadGraph(),loadRecall()]);
   }catch(e){ toast('失败: '+e.message); }
+}
+
+async function doIngestUrl(){
+  const url = $('#ingest-url').value.trim(); if(!url){ toast('请输入链接'); return; }
+  try{ const r = await api('/api/ingest/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`提取入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    $('#ingest-url').value='';
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function uploadIngest(file, endpoint, doingMsg){
+  const fd = new FormData(); fd.append('file', file);
+  toast(doingMsg);
+  try{ const r = await api(endpoint,{method:'POST',body:fd});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function doIngestAudio(input){
+  const f = input.files && input.files[0]; if(!f) return;
+  await uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…');
+  input.value='';
+}
+
+async function doIngestHand(input){
+  const f = input.files && input.files[0]; if(!f) return;
+  await uploadIngest(f, '/api/ingest/handwritten', '手写识别中，首次使用需下载模型，请稍候…');
+  input.value='';
 }
 
 async function doLink(){
