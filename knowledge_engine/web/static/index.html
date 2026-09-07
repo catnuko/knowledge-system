@@ -1,0 +1,213 @@
+&lt;!DOCTYPE html&gt;
+&lt;html lang="zh-CN"&gt;
+&lt;head&gt;
+&lt;meta charset="UTF-8"&gt;
+&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+&lt;title&gt;knowledge-engine · 知识网络&lt;/title&gt;
+&lt;script&gt;
+/* echarts：优先本地（离线可用），缺失时 CDN 兜底 */
+(function(){ var s=document.createElement('script');
+  s.src='/lib/echarts.min.js';
+  s.onerror=function(){ var c=document.createElement('script');
+    c.src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+    document.head.appendChild(c); };
+  document.head.appendChild(s); })();
+&lt;/script&gt;
+&lt;style&gt;
+  :root { --text:#1A1B1C; --muted:#6B7280; --bg:#F4F3EE; --card:#FFFFFF; --border:#E4E3DD;
+          --accent:#8BC8EA; --ok:#52C41A; --warn:#FAAD14; --err:#EA6668; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
+  header { padding:16px 20px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; font-weight:600; }
+  header .tag { font-size:12px; color:var(--muted); }
+  #stats { display:flex; gap:12px; flex-wrap:wrap; margin-left:auto; }
+  .stat { text-align:center; min-width:64px; }
+  .stat b { display:block; font-size:18px; }
+  .stat span { font-size:11px; color:var(--muted); }
+  main { display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:16px; padding:16px 20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .card h2 { font-size:14px; font-weight:600; margin-bottom:10px; }
+  .full { grid-column: 1 / -1; }
+  #graph { width:100%; height:420px; }
+  textarea { width:100%; height:110px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:13px; resize:vertical; font-family:inherit; }
+  input[type=text] { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
+  button { padding:7px 14px; border:none; border-radius:8px; background:var(--accent); color:#123; font-size:13px; cursor:pointer; }
+  button:hover { opacity:.85; }
+  button.sm { padding:4px 10px; font-size:12px; }
+  button.gray { background:#ECEAF3; color:#444; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .item { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; }
+  .item .t { font-weight:600; font-size:13px; }
+  .item .b { color:var(--muted); font-size:12px; margin-top:4px; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; margin-left:6px; }
+  .pill.auto { background:#E7F5E7; color:#2E7D32; }
+  .pill.pending { background:#FFF4E0; color:#B26A00; }
+  .pill.concept { background:#E3F2FD; color:#1565C0; }
+  .pill.claim { background:#E8F5E9; color:#2E7D32; }
+  .pill.question { background:#FFF3E0; color:#E65100; }
+  .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:8px 18px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9; }
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;header&gt;
+  &lt;h1&gt;知识网络&lt;/h1&gt;&lt;span class="tag"&gt;knowledge-engine · 本地优先 · 科学建链&lt;/span&gt;
+  &lt;div id="stats"&gt;&lt;/div&gt;
+&lt;/header&gt;
+
+&lt;main&gt;
+  &lt;section class="card full"&gt;
+    &lt;h2&gt;知识图谱 &lt;span id="graph-hint" style="font-weight:400;color:var(--muted);font-size:12px;"&gt;（点击节点聚焦，滚轮缩放）&lt;/span&gt;&lt;/h2&gt;
+    &lt;div id="graph"&gt;&lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class="card"&gt;
+    &lt;h2&gt;采集&lt;/h2&gt;
+    &lt;textarea id="ingest-text" placeholder="粘贴文本 / 链接正文 / 笔记摘录…"&gt;&lt;/textarea&gt;
+    &lt;div class="row"&gt;
+      &lt;input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;min-width:140px;"&gt;
+      &lt;button onclick="doIngest()"&gt;采集并入库&lt;/button&gt;
+    &lt;/div&gt;
+    &lt;div class="row"&gt;&lt;button class="gray" onclick="doLink()"&gt;执行建链（未链接节点）&lt;/button&gt;&lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class="card"&gt;
+    &lt;h2&gt;间隔重复回取 &lt;span id="due-count" style="font-weight:400;color:var(--muted);font-size:12px;"&gt;&lt;/span&gt;&lt;/h2&gt;
+    &lt;div id="recall-list"&gt;&lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class="card"&gt;
+    &lt;h2&gt;建议箱（待确认边）&lt;/h2&gt;
+    &lt;div id="edge-list"&gt;&lt;/div&gt;
+  &lt;/section&gt;
+
+  &lt;section class="card"&gt;
+    &lt;h2&gt;矛盾检测&lt;/h2&gt;
+    &lt;div id="conflict-list"&gt;&lt;/div&gt;
+    &lt;div class="row"&gt;&lt;button class="gray" onclick="doSynthesize()"&gt;执行每周综合&lt;/button&gt;&lt;/div&gt;
+  &lt;/section&gt;
+&lt;/main&gt;
+&lt;div id="toast"&gt;&lt;/div&gt;
+
+&lt;script&gt;
+const $ = s =&gt; document.querySelector(s);
+const api = async (url, opts) =&gt; { const r = await fetch(url, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); };
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=&gt;t.style.opacity=0,2000); }
+
+async function loadStats(){
+  const s = await api('/api/stats');
+  $('#stats').innerHTML = `
+    &lt;div class="stat"&gt;&lt;b&gt;${s.active}&lt;/b&gt;&lt;span&gt;节点&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="stat"&gt;&lt;b&gt;${s.edges}&lt;/b&gt;&lt;span&gt;边&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="stat"&gt;&lt;b&gt;${s.link_density}&lt;/b&gt;&lt;span&gt;密度&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="stat"&gt;&lt;b&gt;${(s.orphan_rate*100).toFixed(0)}%&lt;/b&gt;&lt;span&gt;孤儿率&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="stat"&gt;&lt;b&gt;${s.due_today}&lt;/b&gt;&lt;span&gt;今日到期&lt;/span&gt;&lt;/div&gt;
+    &lt;div class="stat"&gt;&lt;b&gt;${s.pending_edges}&lt;/b&gt;&lt;span&gt;待确认&lt;/span&gt;&lt;/div&gt;`;
+}
+
+let chart;
+const TYPE_COLOR = { concept:'#8BC8EA', claim:'#94D8C3', question:'#F4B393' };
+const CONFIRM_STYLE = { auto:{color:'#5B8DEF',width:2,type:'solid'}, approved:{color:'#2E7D32',width:2,type:'solid'},
+                        pending:{color:'#B26A00',width:2,type:'dashed'}, rejected:{color:'#ccc',width:1,type:'solid'} };
+async function loadGraph(){
+  if(!chart){ chart = echarts.init($('#graph')); window.addEventListener('resize',()=&gt;chart.resize()); }
+  const {nodes, edges} = await api('/api/graph?root=1&amp;depth=3');
+  if(!nodes.length){ $('#graph-hint').textContent='（暂无节点，先采集内容）'; chart.clear(); return; }
+  const g = {
+    tooltip:{confine:true},
+    series:[{ type:'graph', layout:'force', roam:true, draggable:true, label:{show:true,fontSize:11,color:'#333'},
+      force:{repulsion:320, edgeLength:[60,140]}, lineStyle:{curveness:0.12},
+      data: nodes.map(n=&gt;({ id:n.id, name:n.title.length&gt;14?n.title.slice(0,14)+'…':n.title,
+        symbolSize: n.type==='question'?34:26, itemStyle:{color:TYPE_COLOR[n.type]||'#ccc'}, value:n.title })),
+      links: edges.map(e=&gt;({ source:e.src_id, target:e.dst_id, label:{show:true,formatter:e.rel_type,fontSize:9,color:'#999'},
+        lineStyle:CONFIRM_STYLE[e.confirm_status]||CONFIRM_STYLE.pending }))
+    }]
+  };
+  chart.setOption(g, true);
+  chart.off('click'); chart.on('click', p =&gt; { if(p.dataType==='node'){ loadGraph(); } });
+}
+
+async function doIngest(){
+  const text = $('#ingest-text').value.trim(); if(!text){ toast('请输入内容'); return; }
+  try{ const r = await api('/api/ingest',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text, title:$('#ingest-title').value.trim(), kind:'clipboard'})});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    $('#ingest-text').value=''; $('#ingest-title').value='';
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function doLink(){
+  try{ const r = await api('/api/link',{method:'POST'}); toast(`建链完成：自动 ${r.linked}，待确认 ${r.pending}，环拦截 ${r.cycles}`); }
+  catch(e){ toast('失败: '+e.message); }
+  await Promise.all([loadStats(),loadGraph(),loadEdges()]);
+}
+
+async function loadRecall(){
+  const {cards} = await api('/api/recall');
+  $('#due-count').textContent = cards.length?`（${cards.length} 张待复习）`:'';
+  const box = $('#recall-list');
+  if(!cards.length){ box.innerHTML='&lt;div class="empty"&gt;今日无到期卡片。&lt;/div&gt;'; return; }
+  box.innerHTML = cards.map(c=&gt;{
+    const tag = (!c.recall_state || c.recall_state==='{}') ? '新卡' : '复习中';
+    return `&lt;div class="item"&gt;&lt;span class="t"&gt;[${c.id}] ${c.title}&lt;/span&gt;&lt;span class="pill pending"&gt;${tag}&lt;/span&gt;
+      &lt;div class="b"&gt;${c.body.slice(0,80)}…&lt;/div&gt;
+      &lt;div class="row"&gt;${['again','hard','good','easy'].map(r=&gt;`&lt;button class="sm" onclick="doReview(${c.id},'${r}')"&gt;${r}&lt;/button&gt;`).join('')}&lt;/div&gt;&lt;/div&gt;`;
+  }).join('');
+}
+
+async function doReview(nid, rating){
+  try{ await api(`/api/recall/${nid}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
+    toast(`节点 ${nid} 已按 ${rating} 评分`); await Promise.all([loadRecall(),loadStats()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function loadEdges(){
+  const {edges} = await api('/api/edges?status=pending');
+  const box = $('#edge-list');
+  if(!edges.length){ box.innerHTML='&lt;div class="empty"&gt;建议箱为空。&lt;/div&gt;'; return; }
+  box.innerHTML = edges.map(e=&gt;`&lt;div class="item"&gt;
+    &lt;span class="t"&gt;#${e.src_id} &lt;b&gt;${e.rel_type}&lt;/b&gt; #${e.dst_id}&lt;/span&gt;&lt;span class="pill pending"&gt;conf ${e.confidence}&lt;/span&gt;
+    &lt;div class="b"&gt;${e.rationale||'无理由'}&lt;/div&gt;
+    &lt;div class="row"&gt;&lt;button class="sm" onclick="doConfirm(${e.id},'approve')"&gt;接受&lt;/button&gt;
+    &lt;button class="sm gray" onclick="doConfirm(${e.id},'reject')"&gt;拒绝&lt;/button&gt;
+    &lt;button class="sm gray" onclick="doConfirm(${e.id},'delete')"&gt;删除&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;`).join('');
+}
+
+async function doConfirm(eid, action){
+  try{ await api(`/api/edges/${eid}/confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    toast('已更新'); await Promise.all([loadEdges(),loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function loadConflicts(){
+  const {conflicts} = await api('/api/conflicts');
+  const box = $('#conflict-list');
+  if(!conflicts.length){ box.innerHTML='&lt;div class="empty"&gt;当前无矛盾。&lt;/div&gt;'; return; }
+  box.innerHTML = conflicts.map(c=&gt;`&lt;div class="item"&gt;
+    &lt;span class="t"&gt;A: ${c.a.title}&lt;/span&gt;&lt;br&gt;&lt;span class="t"&gt;B: ${c.b.title}&lt;/span&gt;
+    &lt;div class="b"&gt;${c.rationale}&lt;/div&gt;
+    &lt;div class="row"&gt;&lt;button class="sm" onclick="doResolve(${c.edge_id},'keep')"&gt;保留并存&lt;/button&gt;
+    &lt;button class="sm gray" onclick="doResolve(${c.edge_id},'archive_a')"&gt;归档 A&lt;/button&gt;
+    &lt;button class="sm gray" onclick="doResolve(${c.edge_id},'archive_b')"&gt;归档 B&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;`).join('');
+}
+
+async function doResolve(eid, action){
+  try{ await api(`/api/conflicts/${eid}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    toast('已处理'); await Promise.all([loadConflicts(),loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function doSynthesize(){
+  try{ const r = await api('/api/synthesize',{method:'POST'});
+    const items = r.items||[]; toast(items.length?`综合产出 ${items.length} 篇`:'暂无可综合的社区'); 
+    await Promise.all([loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+(async function init(){ try{ await Promise.all([loadStats(),loadGraph(),loadRecall(),loadEdges(),loadConflicts()]); }catch(e){ toast('加载失败: '+e.message); } })();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
