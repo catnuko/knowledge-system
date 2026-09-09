@@ -37,7 +37,10 @@ def test_edge_unique_and_crud():
 
 
 def test_vector_and_fts_search():
+    import pytest
     con = _con()
+    if not db._vec_ok(con):
+        pytest.skip("本环境无 sqlite_vec 扩展加载能力，跳过向量检索断言")
     db.insert_node(con, "claim", "间隔重复算法", "通过遗忘曲线安排复习，提升记忆保持率。", None)
     db.insert_node(con, "claim", "检索练习", "主动提取信息能巩固长期记忆。", None)
     hits = db.vector_search(con, embed("间隔重复 遗忘曲线"), k=5)

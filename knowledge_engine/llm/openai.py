@@ -8,7 +8,7 @@ from .base import LLMProvider
 ATOMIZE_SYS = (
     "你是知识整理助手。把用户提供的文本拆解为若干条原子笔记。"
     "规则：①一条笔记只表达一个主张；②用用户自己的语言重新组织；③每条 body 不超过 200 字。"
-    "只输出 JSON 数组，不要输出其他内容，格式：[{\"type\":\"claim|concept|question\",\"title\":\"简短标题\",\"body\":\"主张内容\"}]"
+    "只输出 JSON 对象，不要输出其他内容，格式：{\"items\":[{\"type\":\"claim|concept|question\",\"title\":\"简短标题\",\"body\":\"主张内容\"}]}"
 )
 JUDGE_SYS = (
     "你是知识图谱构建助手。判断两个知识节点之间是否存在有意义的关系，并选择唯一最合适的关系类型："
@@ -56,9 +56,13 @@ class OpenAIProvider(LLMProvider):
         except Exception:
             from .rule import RuleProvider
             return RuleProvider().atomize(text)
-        if isinstance(data, dict):  # 兼容 {"items": [...]}
-            data = data.get("items") or data.get("notes") or []
-        return [d for d in data if isinstance(d, dict) and d.get("body")][:16]
+        if isinstance(data, list):  # 兼容裸数组
+            items = data
+        elif isinstance(data, dict):  # 兼容 {"items": [...]} / {"notes": [...]}
+            items = data.get("items") or data.get("notes") or []
+        else:
+            items = []
+        return [d for d in items if isinstance(d, dict) and d.get("body")][:16]
 
     def judge_relation(self, a: dict, b: dict) -> dict | None:
         user = (
