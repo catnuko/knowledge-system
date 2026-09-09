@@ -15,15 +15,24 @@ def link_node(con, nid: int, provider=None, cfg: Config | None = None) -> dict:
     if node is None:
         return {"linked": 0, "pending": 0, "cycles": 0}
 
-    # 召回：向量 Top-20 ∪ FTS Top-10，排除自身
+    # 召回：向量 Top-20 ∪ FTS Top-10，排除自身。
+    # 向量扩展不可用时退化为：FTS Top-50 ∪ 全量余弦 Top-20（MVP 规模下可接受）。
     vec = embed(node["title"] + " " + node["body"])
     candidates: set[int] = set()
-    for r in db.vector_search(con, vec, k=20):
+    vec_hits = db.vector_search(con, vec, k=20)
+    for r in vec_hits:
         candidates.add(r["rowid"])
     query = _fts_query(node["title"])
-    if query:
-        for r in db.fts_search(con, query, k=10):
-            candidates.add(r["rowid"])
+    if not vec_hits:
+        # 无向量索引：FTS 放宽 + 全量余弦召回
+        if query:
+            for r in db.fts_search(con, query, k=50):
+                candidates.add(r["rowid"])
+        candidates.update(_brute_cosine(con, nid, node["title"] + " " + node["body"], k=20))
+    else:
+        if query:
+            for r in db.fts_search(con, query, k=10):
+                candidates.add(r["rowid"])
     candidates.discard(nid)
 
     stat = {"linked": 0, "pending": 0, "cycles": 0}
@@ -117,3 +126,17 @@ def _fts_query(title: str) -> str:
         return ""
     words = [t for t in toks if len(t) >= 2]
     return " ".join(words[:4]) or ""
+
+
+def _brute_cosine(con, nid: int, text: str, k: int = 20) -> list[int]:
+    """无向量索引时的兜底召回：对全部 active 节点做全量余弦排序。MVP 规模可接受。"""
+    from ..embed import cosine
+    vec = embed(text)
+    scored = []
+    for r in db.list_nodes(con, status="active", limit=100000):
+        if r["id"] == nid:
+            continue
+        sim = cosine(vec, embed(r["title"] + " " + r["body"]))
+        scored.append((sim, r["id"]))
+    scored.sort(reverse=True)
+    return [i for _, i in scored[:k]]

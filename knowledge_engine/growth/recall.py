@@ -15,7 +15,7 @@ def due_cards(con, limit: int = 20) -> list[dict]:
            WHERE status = 'active'
              AND (recall_state = '{}'
                   OR json_extract(recall_state, '$.due') IS NULL
-                  OR json_extract(recall_state, '$.due') <= date('now'))
+                  OR date(json_extract(recall_state, '$.due')) <= date('now'))
            ORDER BY id LIMIT ?""",
         (limit,),
     ).fetchall()

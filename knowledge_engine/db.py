@@ -40,13 +40,35 @@ CREATE TABLE IF NOT EXISTS edges (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (src_id, dst_id, rel_type)
 );
-CREATE VIRTUAL TABLE IF NOT EXISTS node_vec USING vec0(embedding float[512]);
 CREATE VIRTUAL TABLE IF NOT EXISTS node_fts USING fts5(title, body, tokenize='trigram');
 CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_id);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
 CREATE INDEX IF NOT EXISTS idx_nodes_source ON nodes(source_ref);
 """
+
+# vec0 向量表单独建：仅在 sqlite_vec 扩展可用时创建
+VEC_SCHEMA = "CREATE VIRTUAL TABLE IF NOT EXISTS node_vec USING vec0(embedding float[512]);"
+
+# 记录各 db_path 是否具备向量能力（扩展不可用则优雅降级）。sqlite3.Connection 不支持自定义属性。
+_VEC_OK: dict[str, bool] = {}
+
+
+def _load_vec(con) -> bool:
+    """尝试加载 sqlite_vec 扩展。不可用（如部分 Python 构建禁用扩展加载）时返回 False。"""
+    if not hasattr(con, "enable_load_extension"):
+        return False
+    try:
+        con.enable_load_extension(True)
+        sqlite_vec.load(con)
+        return True
+    except Exception:
+        return False
+    finally:
+        try:
+            con.enable_load_extension(False)
+        except Exception:
+            pass
 
 
 def connect(cfg: Config | None = None) -> sqlite3.Connection:
@@ -56,11 +78,22 @@ def connect(cfg: Config | None = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA foreign_keys=ON")
-    con.enable_load_extension(True)
-    sqlite_vec.load(con)
-    con.enable_load_extension(False)
+    vec_ok = _load_vec(con)
     con.executescript(SCHEMA)
+    if vec_ok:
+        con.executescript(VEC_SCHEMA)
+    _VEC_OK[str(cfg.db_path)] = vec_ok
+    # 让 _vec_ok 能按连接找到对应库（取连接当前主库文件名）
     return con
+
+
+def _vec_ok(con) -> bool:
+    try:
+        path = con.execute("PRAGMA database_list").fetchone()[2]
+    except Exception:
+        return False
+    return _VEC_OK.get(path, False)
+
 
 
 # ---------- 节点 ----------
@@ -73,9 +106,10 @@ def insert_node(con, type_: str, title: str, body: str, source_ref: int | None,
             (type_, title, body, source_ref, status, json.dumps(recall_state or {})),
         )
         nid = cur.lastrowid
-        # 向量 + 全文索引（与节点同事务）
-        vec = embed(title + " " + body)
-        con.execute("INSERT INTO node_vec(rowid, embedding) VALUES (?, ?)", (nid, json.dumps(vec)))
+        # 向量（可用时）+ 全文索引（与节点同事务）
+        if _vec_ok(con):
+            vec = embed(title + " " + body)
+            con.execute("INSERT INTO node_vec(rowid, embedding) VALUES (?, ?)", (nid, json.dumps(vec)))
         con.execute("INSERT INTO node_fts(rowid, title, body) VALUES (?, ?, ?)", (nid, title, body))
     return nid
 
@@ -160,7 +194,9 @@ def find_source_by_fingerprint(con, fp: str) -> sqlite3.Row | None:
 # ---------- 检索 ----------
 
 def vector_search(con, vec: list[float], k: int = 20) -> list[sqlite3.Row]:
-    """vec0 KNN：返回 {rowid, distance}。"""
+    """vec0 KNN：返回 {rowid, distance}。向量扩展不可用时返回空（由调用方退化为 FTS 召回）。"""
+    if not _vec_ok(con):
+        return []
     return con.execute(
         "SELECT rowid, distance FROM node_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
         (json.dumps(vec), k),

@@ -17,12 +17,24 @@ def test_due_and_review():
     s1 = review(con, nid, "good")
     assert s1["reps"] == 1 and s1["state"] == 1  # learning
     assert "due" in s1 and s1["due"]
-    # 复习后不再是新卡
-    cards2 = due_cards(con)
-    assert not any(c["id"] == nid for c in cards2) or True  # learning 卡 step 未结束也可能仍到期，仅验证状态
+    # 到期检测必须对「今日到期」的卡返回（due 存的是带时区的 datetime，不能只按 date 字符串比较）
+    due_today = due_cards(con)
+    assert any(c["id"] == nid for c in due_today), "今日到期的卡必须出现在到期队列"
     node = db.get_node(con, nid)
     st = json.loads(node["recall_state"])
     assert st["reps"] == 1
+    con.close()
+
+
+def test_due_cards_today_with_datetime_due():
+    """回归：recall_state.due 是带时间的 ISO datetime，到期检测不能只按 date 比较。"""
+    from datetime import date
+    con = db.connect()
+    nid = db.insert_node(con, "claim", "到期边界", "验证 datetime 到期不会被漏掉的内容。", None)
+    today = date.today().isoformat()
+    db.update_recall_state(con, nid, {"due": f"{today}T02:04:33+00:00", "reps": 1})
+    cards = due_cards(con)
+    assert any(c["id"] == nid for c in cards), "due 为今日 datetime 的卡必须在到期队列"
     con.close()
 
 

@@ -7,7 +7,7 @@ def all_metrics(con) -> dict:
     due = con.execute(
         """SELECT COUNT(*) c FROM nodes WHERE status='active'
            AND (recall_state='{}' OR json_extract(recall_state,'$.due') IS NULL
-                OR json_extract(recall_state,'$.due') <= date('now'))""").fetchone()["c"]
+                OR date(json_extract(recall_state,'$.due')) <= date('now'))""").fetchone()["c"]
     reviewed = con.execute(
         "SELECT COUNT(*) c FROM nodes WHERE recall_state != '{}'").fetchone()["c"]
     synthesis = con.execute(
