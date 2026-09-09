@@ -1,7 +1,7 @@
 [project]
-name = "knowledge-engine"
+name = "secondme"
 version = "0.2.0"
-description = "个人知识系统：多源采集 → AI 原子化 → 科学知识网络（Zettelkasten + KST + FSRS）"
+description = "SecondMe · 第二个我 — Personal knowledge network: multi-source capture → AI atomization → scientific knowledge graph (Zettelkasten + KST + FSRS)"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"

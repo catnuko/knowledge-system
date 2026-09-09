@@ -1,6 +1,6 @@
-# Knowledge Engine · 架构与机制文档
+# SecondMe · 架构与机制文档
 
-本文档记录 knowledge-engine 的数据模型、9 类命题边、建链门控、FSRS 间隔重复、GraphRAG 问答、Feynman 主动验证与 API 速查。供二次开发与审计使用。
+本文档记录 SecondMe（第二个我）的数据模型、9 类命题边、建链门控、FSRS 间隔重复、GraphRAG 问答、Feynman 主动验证与 API 速查。供二次开发与审计使用。
 
 ## 目录
 
