@@ -30,3 +30,6 @@ web/dist/
 
 # 后端日志
 *.log
+
+# TRAE IDE 自动生成的 HTML 预览打包文件
+.trae-html-share-packages/
