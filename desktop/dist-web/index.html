@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>knowledge-engine</title>
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+         background: #F4F3EE; display: flex; align-items: center; justify-content: center; }
+  .box { text-align: center; color: #6B7280; }
+  .box .dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+              background: #8BC8EA; animation: pulse 1.2s ease-in-out infinite; }
+  .box p { margin-top: 14px; font-size: 14px; }
+  @keyframes pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="box">
+    <span class="dot"></span>
+    <p>正在启动本地知识引擎后端…</p>
+  </div>
+</body>
+</html>

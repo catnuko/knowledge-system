@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>knowledge-engine · 知识网络</title>
+<script>
+/* echarts：优先本地（离线可用），缺失时 CDN 兜底 */
+(function(){ var s=document.createElement('script');
+  s.src='/lib/echarts.min.js';
+  s.onerror=function(){ var c=document.createElement('script');
+    c.src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+    document.head.appendChild(c); };
+  document.head.appendChild(s); })();
+</script>
+<style>
+  :root { --text:#1A1B1C; --muted:#6B7280; --bg:#F4F3EE; --card:#FFFFFF; --border:#E4E3DD;
+          --accent:#8BC8EA; --ok:#52C41A; --warn:#FAAD14; --err:#EA6668; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
+  header { padding:16px 20px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  header h1 { font-size:18px; font-weight:600; }
+  header .tag { font-size:12px; color:var(--muted); }
+  #stats { display:flex; gap:12px; flex-wrap:wrap; margin-left:auto; }
+  .stat { text-align:center; min-width:64px; }
+  .stat b { display:block; font-size:18px; }
+  .stat span { font-size:11px; color:var(--muted); }
+  main { display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:16px; padding:16px 20px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
+  .card h2 { font-size:14px; font-weight:600; margin-bottom:10px; }
+  .full { grid-column: 1 / -1; }
+  #graph { width:100%; height:420px; }
+  textarea { width:100%; height:110px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:13px; resize:vertical; font-family:inherit; }
+  input[type=text] { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
+  button { padding:7px 14px; border:none; border-radius:8px; background:var(--accent); color:#123; font-size:13px; cursor:pointer; }
+  button:hover { opacity:.85; }
+  button.sm { padding:4px 10px; font-size:12px; }
+  button.gray { background:#ECEAF3; color:#444; }
+  .up { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border:1px dashed var(--border);
+        border-radius:8px; background:#FAFAF7; color:#444; font-size:13px; cursor:pointer; }
+  .up:hover { border-color:var(--accent); color:#123; }
+  .up input[type=file] { display:none; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  .item { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; }
+  .item .t { font-weight:600; font-size:13px; }
+  .item .b { color:var(--muted); font-size:12px; margin-top:4px; }
+  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; margin-left:6px; }
+  .pill.auto { background:#E7F5E7; color:#2E7D32; }
+  .pill.pending { background:#FFF4E0; color:#B26A00; }
+  .pill.concept { background:#E3F2FD; color:#1565C0; }
+  .pill.claim { background:#E8F5E9; color:#2E7D32; }
+  .pill.question { background:#FFF3E0; color:#E65100; }
+  .empty { color:var(--muted); font-size:13px; padding:12px 0; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:8px 18px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9; }
+</style>
+</head>
+<body>
+<header>
+  <h1>知识网络</h1><span class="tag">knowledge-engine · 本地优先 · 科学建链</span>
+  <div id="stats"></div>
+</header>
+
+<main>
+  <section class="card full">
+    <h2>知识图谱 <span id="graph-hint" style="font-weight:400;color:var(--muted);font-size:12px;">（点击节点聚焦，滚轮缩放）</span></h2>
+    <div id="graph"></div>
+  </section>
+
+  <section class="card">
+    <h2>采集 <span style="font-weight:400;color:var(--muted);font-size:12px;">文本 / 链接 / 音频</span></h2>
+    <textarea id="ingest-text" placeholder="粘贴文本 / 笔记摘录…"></textarea>
+    <div class="row">
+      <input type="text" id="ingest-url" placeholder="粘贴链接，自动提取正文（公众号/博客/文档…）" style="flex:1;min-width:140px;">
+      <button onclick="doIngestUrl()">提取</button>
+    </div>
+    <div class="row">
+      <label class="up"><input type="file" id="ingest-audio" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.wma" onchange="doIngestAudio(this)">上传音频 · 自动转写</label>
+    </div>
+    <div class="row">
+      <input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;min-width:140px;">
+      <button onclick="doIngest()">文本入库</button>
+    </div>
+    <div class="row"><button class="gray" onclick="doLink()">执行建链（未链接节点）</button></div>
+  </section>
+
+  <section class="card">
+    <h2>间隔重复回取 <span id="due-count" style="font-weight:400;color:var(--muted);font-size:12px;"></span></h2>
+    <div id="recall-list"></div>
+  </section>
+
+  <section class="card">
+    <h2>建议箱（待确认边）</h2>
+    <div id="edge-list"></div>
+  </section>
+
+  <section class="card">
+    <h2>矛盾检测</h2>
+    <div id="conflict-list"></div>
+    <div class="row"><button class="gray" onclick="doSynthesize()">执行每周综合</button></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (url, opts) => { const r = await fetch(url, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); };
+let toastTimer;
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0,2000); }
+
+async function loadStats(){
+  const s = await api('/api/stats');
+  $('#stats').innerHTML = `
+    <div class="stat"><b>${s.active}</b><span>节点</span></div>
+    <div class="stat"><b>${s.edges}</b><span>边</span></div>
+    <div class="stat"><b>${s.link_density}</b><span>密度</span></div>
+    <div class="stat"><b>${(s.orphan_rate*100).toFixed(0)}%</b><span>孤儿率</span></div>
+    <div class="stat"><b>${s.due_today}</b><span>今日到期</span></div>
+    <div class="stat"><b>${s.pending_edges}</b><span>待确认</span></div>`;
+}
+
+let chart;
+const TYPE_COLOR = { concept:'#8BC8EA', claim:'#94D8C3', question:'#F4B393' };
+const CONFIRM_STYLE = { auto:{color:'#5B8DEF',width:2,type:'solid'}, approved:{color:'#2E7D32',width:2,type:'solid'},
+                        pending:{color:'#B26A00',width:2,type:'dashed'}, rejected:{color:'#ccc',width:1,type:'solid'} };
+async function loadGraph(){
+  if(!chart){ chart = echarts.init($('#graph')); window.addEventListener('resize',()=>chart.resize()); }
+  const {nodes, edges} = await api('/api/graph?root=1&depth=3');
+  if(!nodes.length){ $('#graph-hint').textContent='（暂无节点，先采集内容）'; chart.clear(); return; }
+  const g = {
+    tooltip:{confine:true},
+    series:[{ type:'graph', layout:'force', roam:true, draggable:true, label:{show:true,fontSize:11,color:'#333'},
+      force:{repulsion:320, edgeLength:[60,140]}, lineStyle:{curveness:0.12},
+      data: nodes.map(n=>({ id:n.id, name:n.title.length>14?n.title.slice(0,14)+'…':n.title,
+        symbolSize: n.type==='question'?34:26, itemStyle:{color:TYPE_COLOR[n.type]||'#ccc'}, value:n.title })),
+      links: edges.map(e=>({ source:e.src_id, target:e.dst_id, label:{show:true,formatter:e.rel_type,fontSize:9,color:'#999'},
+        lineStyle:CONFIRM_STYLE[e.confirm_status]||CONFIRM_STYLE.pending }))
+    }]
+  };
+  chart.setOption(g, true);
+  chart.off('click'); chart.on('click', p => { if(p.dataType==='node'){ loadGraph(); } });
+}
+
+async function doIngest(){
+  const text = $('#ingest-text').value.trim(); if(!text){ toast('请输入内容'); return; }
+  try{ const r = await api('/api/ingest',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text, title:$('#ingest-title').value.trim(), kind:'clipboard'})});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    $('#ingest-text').value=''; $('#ingest-title').value='';
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function doIngestUrl(){
+  const url = $('#ingest-url').value.trim(); if(!url){ toast('请输入链接'); return; }
+  try{ const r = await api('/api/ingest/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`提取入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    $('#ingest-url').value='';
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function uploadIngest(file, endpoint, doingMsg){
+  const fd = new FormData(); fd.append('file', file);
+  toast(doingMsg);
+  try{ const r = await api(endpoint,{method:'POST',body:fd});
+    toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
+    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+  }catch(e){ toast('失败: '+e.message); }
+}
+
+async function doIngestAudio(input){
+  const f = input.files && input.files[0]; if(!f) return;
+  await uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…');
+  input.value='';
+}
+
+async function doLink(){
+  try{ const r = await api('/api/link',{method:'POST'}); toast(`建链完成：自动 ${r.linked}，待确认 ${r.pending}，环拦截 ${r.cycles}`); }
+  catch(e){ toast('失败: '+e.message); }
+  await Promise.all([loadStats(),loadGraph(),loadEdges()]);
+}
+
+async function loadRecall(){
+  const {cards} = await api('/api/recall');
+  $('#due-count').textContent = cards.length?`（${cards.length} 张待复习）`:'';
+  const box = $('#recall-list');
+  if(!cards.length){ box.innerHTML='<div class="empty">今日无到期卡片。</div>'; return; }
+  box.innerHTML = cards.map(c=>{
+    const tag = (!c.recall_state || c.recall_state==='{}') ? '新卡' : '复习中';
+    return `<div class="item"><span class="t">[${c.id}] ${c.title}</span><span class="pill pending">${tag}</span>
+      <div class="b">${c.body.slice(0,80)}…</div>
+      <div class="row">${['again','hard','good','easy'].map(r=>`<button class="sm" onclick="doReview(${c.id},'${r}')">${r}</button>`).join('')}</div></div>`;
+  }).join('');
+}
+
+async function doReview(nid, rating){
+  try{ await api(`/api/recall/${nid}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
+    toast(`节点 ${nid} 已按 ${rating} 评分`); await Promise.all([loadRecall(),loadStats()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function loadEdges(){
+  const {edges} = await api('/api/edges?status=pending');
+  const box = $('#edge-list');
+  if(!edges.length){ box.innerHTML='<div class="empty">建议箱为空。</div>'; return; }
+  box.innerHTML = edges.map(e=>`<div class="item">
+    <span class="t">#${e.src_id} <b>${e.rel_type}</b> #${e.dst_id}</span><span class="pill pending">conf ${e.confidence}</span>
+    <div class="b">${e.rationale||'无理由'}</div>
+    <div class="row"><button class="sm" onclick="doConfirm(${e.id},'approve')">接受</button>
+    <button class="sm gray" onclick="doConfirm(${e.id},'reject')">拒绝</button>
+    <button class="sm gray" onclick="doConfirm(${e.id},'delete')">删除</button></div></div>`).join('');
+}
+
+async function doConfirm(eid, action){
+  try{ await api(`/api/edges/${eid}/confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    toast('已更新'); await Promise.all([loadEdges(),loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function loadConflicts(){
+  const {conflicts} = await api('/api/conflicts');
+  const box = $('#conflict-list');
+  if(!conflicts.length){ box.innerHTML='<div class="empty">当前无矛盾。</div>'; return; }
+  box.innerHTML = conflicts.map(c=>`<div class="item">
+    <span class="t">A: ${c.a.title}</span><br><span class="t">B: ${c.b.title}</span>
+    <div class="b">${c.rationale}</div>
+    <div class="row"><button class="sm" onclick="doResolve(${c.edge_id},'keep')">保留并存</button>
+    <button class="sm gray" onclick="doResolve(${c.edge_id},'archive_a')">归档 A</button>
+    <button class="sm gray" onclick="doResolve(${c.edge_id},'archive_b')">归档 B</button></div></div>`).join('');
+}
+
+async function doResolve(eid, action){
+  try{ await api(`/api/conflicts/${eid}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    toast('已处理'); await Promise.all([loadConflicts(),loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+async function doSynthesize(){
+  try{ const r = await api('/api/synthesize',{method:'POST'});
+    const items = r.items||[]; toast(items.length?`综合产出 ${items.length} 篇`:'暂无可综合的社区'); 
+    await Promise.all([loadStats(),loadGraph()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+
+(async function init(){ try{ await Promise.all([loadStats(),loadGraph(),loadRecall(),loadEdges(),loadConflicts()]); }catch(e){ toast('加载失败: '+e.message); } })();
+</script>
+</body>
+</html>
