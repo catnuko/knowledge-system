@@ -12,12 +12,15 @@ export KE_LLM="${KE_LLM:-rule}"
 export KE_EMBEDDING="${KE_EMBEDDING:-light}"
 rm -f "$KE_DB" "$KE_DB-shm" "$KE_DB-wal" 2>/dev/null || true
 
+# uv run 前缀确保使用虚拟环境中的 ke 命令
+KE="${KE_CMD:-uv run ke}"
+
 echo "[smoke] 1/7 ingest-text"
-ke ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率。检索练习通过主动提取巩固记忆。" --title "记忆理论"
-ke ingest-text "主动回忆比重读更有效，是检索练习的核心机制。" --title "回忆"
+$KE ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率。检索练习通过主动提取巩固记忆。" --title "记忆理论"
+$KE ingest-text "主动回忆比重读更有效，是检索练习的核心机制。" --title "回忆"
 
 echo "[smoke] 2/7 link"
-OUT=$(ke link --all)
+OUT=$($KE link --all)
 echo "$OUT"
 # 必须产出至少一条候选边（auto 或 pending），否则建链闭环有问题
 echo "$OUT" | grep -qE "自动建链 [1-9]|待确认 [1-9]" \
@@ -33,17 +36,17 @@ echo "[smoke] 4/7 review"
 # 取第一条到期卡片 id 评分（节点 id 从 recall 输出里抓 [N]）
 NID=$(echo "$RECALL" | grep -oE '\[[0-9]+\]' | head -1 | tr -d '[]')
 [ -n "$NID" ] || { echo "[smoke] FAIL: 未抓到节点 id"; exit 1; }
-ke review "$NID" good | grep -q '"reps": 1' \
+$KE review "$NID" good | grep -q '"reps": 1' \
   || { echo "[smoke] FAIL: review 未更新 reps"; exit 1; }
 
 echo "[smoke] 5/7 synthesize"
-ke synthesize  # 不强校验产出（连通分量 <2 时会提示无足够节点）
+$KE synthesize  # 不强校验产出（连通分量 <2 时会提示无足够节点）
 
 echo "[smoke] 6/7 conflicts"
-ke conflicts  # 无矛盾时打印"当前无未解决的矛盾"也通过
+$KE conflicts  # 无矛盾时打印"当前无未解决的矛盾"也通过
 
 echo "[smoke] 7/7 stats"
-STATS=$(ke stats)
+STATS=$($KE stats)
 echo "$STATS"
 # ingest 2 个 + synthesize 1 个综合节点 = 3
 echo "$STATS" | grep -q '"nodes": 3' \

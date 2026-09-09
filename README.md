@@ -9,9 +9,9 @@
 ## 快速开始
 
 ```bash
-pip install -e .            # 安装依赖（sqlite-vec / fsrs / trafilatura / jieba / fastapi）
-
-ke ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率" --title "间隔重复"
+# 用 uv（推荐）：自动创建虚拟环境 + 锁定依赖
+uv sync                    # 安装依赖（sqlite-vec / fsrs / trafilatura / jieba / fastapi）
+uv run ke ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率" --title "间隔重复"
 ke ingest-file notes.md     # 本地文件
 ke ingest-url https://www.ruanyifeng.com/blog/...   # 网页提取（trafilatura）
 ke link --all               # 建链：自动边 + 建议箱 + 孤儿标记
@@ -21,6 +21,7 @@ ke synthesize               # 每周综合（连通分量 → 综述 → 新节�
 ke conflicts                # 矛盾检测报告
 ke stats                    # 指标面板（含掌握度 mastery_avg / Feynman 次数）
 ke serve --port 8000        # Web 面板（图谱 / 采集 / 回取 / 建议箱 / 矛盾 / 问答 / 主动验证）
+# 也可用 uv run ke serve --port 8000
 ```
 
 Web 面板新增模块：
@@ -80,7 +81,7 @@ Web 面板新增模块：
 ### 启用 BGE 语义嵌入（推荐）
 
 ```bash
-pip install torch transformers          # CPU 版 torch：pip install torch --index-url https://download.pytorch.org/whl/cpu
+uv pip install torch transformers      # CPU 版 torch：uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 # 首次调用自动从 HuggingFace 下载 BAAI/bge-small-zh-v1.5（约 100MB），
 # 国内网络可设置 HF_ENDPOINT=https://hf-mirror.com
 export KE_EMBEDDING=bge
@@ -99,14 +100,14 @@ export KE_LLM=openai KE_LLM_KEY=sk-xxx KE_LLM_BASE=https://api.deepseek.com/v1 K
 ### 音频源（接口已预留）
 
 ```bash
-pip install funasr modelscope    # 音频转写（中文优化，本地推理）
+uv pip install funasr modelscope    # 音频转写（中文优化，本地推理）
 ```
 
 ## 测试
 
 ```bash
-python -m pytest tests/ -q        # 44+ 用例：存储/流水线/建链/回取/问答/主动验证/成熟度（9 类边 ×门控 ×DAG ×综合 ×矛盾 ×指标 ×孤儿）
-bash scripts/smoke.sh             # 端到端冒烟：采集→建链→回取→综合→矛盾→指标
+uv run pytest tests/ -q        # 44+ 用例：存储/流水线/建链/回取/问答/主动验证/成熟度（9 类边 ×门控 ×DAG ×综合 ×矛盾 ×指标 ×孤儿）
+uv run bash scripts/smoke.sh    # 端到端冒烟：采集→建链→回取→综合→矛盾→指标
 ```
 
 ## 文档
