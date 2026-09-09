@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "trae/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Tests (${{ matrix.os }} / Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 跨平台覆盖 sqlite_vec 扩展加载差异
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install package
+        # Linux 标准构建 Python 不开 enable_load_extension，正好覆盖降级路径
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest
+      - name: Run unit tests
+        env:
+          KE_LLM: rule
+          KE_EMBEDDING: light
+        run: python -m pytest tests/ -v
+
+  smoke:
+    name: End-to-end smoke (CLI closed loop)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Run smoke script
+        env:
+          KE_DB: /tmp/ke_smoke.db
+          KE_LLM: rule
+          KE_EMBEDDING: light
+        run: bash scripts/smoke.sh

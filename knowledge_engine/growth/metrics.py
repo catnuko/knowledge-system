@@ -17,6 +17,9 @@ def all_metrics(con) -> dict:
     recalled = con.execute(
         """SELECT COUNT(*) c FROM nodes WHERE recall_state != '{}'
            AND json_extract(recall_state,'$.reps') >= 1""").fetchone()["c"]
+    mastery = db.all_mastery(con)
+    feynman_total = con.execute(
+        "SELECT COUNT(*) c FROM verifications WHERE mode='feynman'").fetchone()["c"]
     return {
         **s,
         "due_today": due,
@@ -24,4 +27,7 @@ def all_metrics(con) -> dict:
         "recalled_nodes": recalled,
         "pending_edges": pending,
         "synthesis_count": synthesis,
+        "mastery_avg": mastery["avg"],
+        "mastery_verified": mastery["verified"],
+        "feynman_count": feynman_total,
     }

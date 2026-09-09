@@ -52,6 +52,14 @@ def ingest_file(con, path: str, provider=None, cfg: Config | None = None) -> dic
     return ingest_text(con, text, kind="file", title=title, raw_path=path, provider=provider, cfg=cfg)
 
 
+def ingest_image(con, path: str, provider=None, cfg: Config | None = None) -> dict:
+    """图片采集：OCR 提取文本 → 统一流水线。"""
+    from .extractors import extract_image
+    title, text = extract_image(path)
+    fname = path.rsplit("/", 1)[-1]
+    return ingest_text(con, text, kind="file", title=title, raw_path=fname, provider=provider, cfg=cfg)
+
+
 def ingest_audio(con, path: str, provider=None, cfg: Config | None = None) -> dict:
     """音频采集：ASR 转写 → 统一流水线。"""
     from .audio import transcribe_audio

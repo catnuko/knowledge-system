@@ -18,6 +18,39 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{Manager, RunEvent};
+use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
+
+/// 剪贴板文本采集快捷键（跨平台：Cmd+Shift+C 在 mac，Ctrl+Shift+C 在其他）
+fn capture_shortcut() -> Shortcut {
+    let modifier = if cfg!(target_os = "macos") {
+        Modifiers::SUPER | Modifiers::SHIFT
+    } else {
+        Modifiers::CONTROL | Modifiers::SHIFT
+    };
+    Shortcut::new(Some(modifier), Code::KeyC)
+}
+
+/// 把剪贴板文本 POST 到本地后端 /api/ingest。
+/// 用 std::net::TcpStream 手写最小 HTTP，避免引入 reqwest 重依赖。
+fn post_clipboard_to_backend(port: u16, text: &str) {
+    let body = format!(
+        "{{\"text\":{},\"kind\":\"clipboard\"}}",
+        serde_json::Value::String(text.to_string())
+    );
+    let req = format!(
+        "POST /api/ingest HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+         Content-Type: application/json\r\nContent-Length: {len}\r\n\r\n{body}",
+        len = body.len(),
+    );
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    if let Ok(mut stream) = TcpStream::connect_timeout(&addr, CONNECT_TIMEOUT) {
+        use std::io::{Read, Write};
+        let _ = stream.set_write_timeout(Some(CONNECT_TIMEOUT));
+        if stream.write_all(req.as_bytes()).is_ok() {
+            let _ = stream.read(&mut [0u8; 256]); // 丢弃响应
+        }
+    }
+}
 
 const DEFAULT_PORT: u16 = 8000;
 const HEALTH_RETRIES: u32 = 120; // 120 × 500ms ≈ 60s
@@ -111,6 +144,8 @@ fn wait_backend_ready(port: u16) -> bool {
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let handle = app.handle().clone();
             let port = backend_port();
@@ -139,6 +174,28 @@ pub fn run() {
                     win.set_title(&format!("知识网络 · knowledge-engine（{url}）")).ok();
                 }
             }
+
+            // 注册全局快捷键：剪贴板采集。handler 持有 AppHandle 以便读剪贴板
+            let h = app.handle().clone();
+            app.global_shortcut()
+                .on_shortcut(capture_shortcut(), move |_app, _shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    // 读剪贴板文本，POST 到后端
+                    use tauri_plugin_clipboard_manager::ClipboardExt;
+                    match h.clipboard().get_text() {
+                        Ok(text) if !text.trim().is_empty() => {
+                            post_clipboard_to_backend(backend_port(), &text);
+                            if let Some(win) = h.get_webview_window("main") {
+                                let _ = win.set_focus();
+                            }
+                        }
+                        _ => {}
+                    }
+                })
+                .expect("注册全局快捷键失败（可能快捷键被其他应用占用）");
+
             Ok(())
         })
         .build(tauri::generate_context!())

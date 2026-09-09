@@ -1,4 +1,4 @@
-"""采集：内容提取器（本地文件 / URL）。音频走独立适配器（接口预留）。"""
+"""采集：内容提取器（本地文件 / URL / 图片 OCR）。音频走独立适配器（接口预留）。"""
 from pathlib import Path
 
 
@@ -9,6 +9,29 @@ def extract_file(path: str) -> tuple[str, str]:
         raise FileNotFoundError(path)
     text = p.read_text(encoding="utf-8", errors="replace")
     return p.stem, text
+
+
+def extract_image(path: str) -> tuple[str, str]:
+    """从图片提取 (title, text)。rapidocr-onnxruntime 本地推理，未安装时给出明确提示。
+    支持 png/jpg/jpeg/webp/bmp。"""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(path)
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+    except ImportError as e:
+        raise RuntimeError(
+            "图片 OCR 未启用：需要安装 rapidocr-onnxruntime。"
+            "pip install rapidocr-onnxruntime （首次自动下载 ONNX 模型约 10MB）"
+        ) from e
+    engine = RapidOCR()
+    result, _elapsed = engine(str(p))
+    lines = [item[1] for item in result] if result else []
+    text = "\n".join(lines).strip()
+    if not text:
+        raise RuntimeError(f"图片无可识别文本: {path}")
+    title = (text[:24] + "…") if len(text) > 24 else text
+    return title, text
 
 
 def extract_url(url: str, timeout: int = 20) -> tuple[str, str]:

@@ -45,6 +45,17 @@ CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src_id);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status);
 CREATE INDEX IF NOT EXISTS idx_nodes_source ON nodes(source_ref);
+CREATE TABLE IF NOT EXISTS verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nid INTEGER NOT NULL REFERENCES nodes(id),
+    mode TEXT NOT NULL CHECK (mode IN ('feynman','recall','generative')),
+    paraphrase TEXT NOT NULL DEFAULT '',
+    gaps TEXT NOT NULL DEFAULT '[]',
+    score REAL NOT NULL DEFAULT 0,
+    feedback TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_verif_nid ON verifications(nid);
 """
 
 # vec0 向量表单独建：仅在 sqlite_vec 扩展可用时创建
@@ -55,20 +66,37 @@ _VEC_OK: dict[str, bool] = {}
 
 
 def _load_vec(con) -> bool:
-    """尝试加载 sqlite_vec 扩展。不可用（如部分 Python 构建禁用扩展加载）时返回 False。"""
-    if not hasattr(con, "enable_load_extension"):
-        return False
+    """加载 sqlite_vec 扩展。跨平台优先级：
+    1) con.load_extension(loadable_path)——最稳，不依赖 enable_load_extension 编译开关
+    2) enable_load_extension(True) + sqlite_vec.load(con)——标准路径
+    3) 都不可用（如 CPython 编译时禁用扩展加载）返回 False，由调用方降级
+    """
+    # 路径 1：直接 load_extension，最稳
+    path = None
     try:
-        con.enable_load_extension(True)
-        sqlite_vec.load(con)
-        return True
+        path = sqlite_vec.loadable_path()
     except Exception:
-        return False
-    finally:
+        path = None
+    if path and hasattr(con, "load_extension"):
         try:
-            con.enable_load_extension(False)
+            con.load_extension(path)
+            return True
         except Exception:
-            pass
+            pass  # 落到路径 2
+    # 路径 2：enable_load_extension + sqlite_vec.load
+    if hasattr(con, "enable_load_extension"):
+        try:
+            con.enable_load_extension(True)
+            sqlite_vec.load(con)
+            return True
+        except Exception:
+            return False
+        finally:
+            try:
+                con.enable_load_extension(False)
+            except Exception:
+                pass
+    return False
 
 
 def connect(cfg: Config | None = None) -> sqlite3.Connection:
@@ -263,3 +291,78 @@ def stats(con) -> dict:
     density = round(edges / active, 2) if active else 0.0
     return {"nodes": nodes, "active": active, "edges": edges,
             "link_density": density, "orphan_rate": round(orphan / active, 3) if active else 0.0}
+
+
+# ---------- 主动验证 ----------
+
+def insert_verification(con, nid: int, mode: str, paraphrase: str,
+                       gaps: list, score: float, feedback: str) -> int:
+    """记录一次 Feynman/回忆验证。"""
+    with con:
+        cur = con.execute(
+            "INSERT INTO verifications(nid, mode, paraphrase, gaps, score, feedback) VALUES (?,?,?,?,?,?)",
+            (nid, mode, paraphrase, json.dumps(gaps, ensure_ascii=False), score, feedback),
+        )
+        return cur.lastrowid
+
+
+def list_verifications(con, nid: int, mode: str | None = None, limit: int = 20) -> list[sqlite3.Row]:
+    """节点的验证历史（最近 limit 条）。"""
+    if mode:
+        return con.execute(
+            "SELECT * FROM verifications WHERE nid=? AND mode=? ORDER BY id DESC LIMIT ?",
+            (nid, mode, limit)).fetchall()
+    return con.execute(
+        "SELECT * FROM verifications WHERE nid=? ORDER BY id DESC LIMIT ?", (nid, limit)).fetchall()
+
+
+def node_mastery(con, nid: int) -> dict:
+    """节点掌握度：fsrs 保留度（reps/stability）+ Feynman 平均分加权。
+    返回 {score(0-1), fsrs_score, feynman_score, feynman_count, last_feynman}。
+    """
+    node = get_node(con, nid)
+    if node is None:
+        return {"score": 0.0, "fsrs_score": 0.0, "feynman_score": 0.0,
+                "feynman_count": 0, "last_feynman": ""}
+    raw = json.loads(node["recall_state"] or "{}")
+    reps = int(raw.get("reps", 0))
+    stability = float(raw.get("stability", 0) or 0)
+    # FSRS 保留度代理：reps 趋近 5 次视为稳定 + stability 贡献
+    fsrs_score = round(min(1.0, reps / 5 * 0.6 + min(1.0, stability / 30) * 0.4), 3)
+
+    rows = list_verifications(con, nid, mode="feynman", limit=10)
+    feynman_scores = [r["score"] for r in rows if r["score"] is not None]
+    feynman_score = round(sum(feynman_scores) / len(feynman_scores), 3) if feynman_scores else 0.0
+    last = rows[0]["created_at"] if rows else ""
+
+    # 加权：有 Feynman 时 0.4 fsrs + 0.6 feynman；无则纯 fsrs（保守）
+    if feynman_scores:
+        score = round(0.4 * fsrs_score + 0.6 * feynman_score, 3)
+    else:
+        score = fsrs_score
+    return {"score": score, "fsrs_score": fsrs_score, "feynman_score": feynman_score,
+            "feynman_count": len(feynman_scores), "last_feynman": last}
+
+
+def all_mastery(con) -> dict:
+    """知识库总体掌握度统计：平均分 + 分级分布 + 已验证节点数。"""
+    rows = con.execute(
+        """SELECT n.id, n.recall_state FROM nodes n
+           WHERE n.status IN ('active','pending_link')""").fetchall()
+    if not rows:
+        return {"avg": 0.0, "verified": 0, "total": 0, "buckets": {"low": 0, "mid": 0, "high": 0}}
+    total = len(rows)
+    scores = []
+    buckets = {"low": 0, "mid": 0, "high": 0}
+    verified = 0
+    for r in rows:
+        m = node_mastery(con, r["id"])
+        s = m["score"]
+        scores.append(s)
+        if m["feynman_count"] > 0:
+            verified += 1
+        if s < 0.4: buckets["low"] += 1
+        elif s < 0.75: buckets["mid"] += 1
+        else: buckets["high"] += 1
+    return {"avg": round(sum(scores) / total, 3), "verified": verified, "total": total,
+            "buckets": buckets}

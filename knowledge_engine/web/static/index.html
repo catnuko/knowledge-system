@@ -5,12 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>knowledge-engine · 知识网络</title>
 <script>
-/* echarts：优先本地（离线可用），缺失时 CDN 兜底 */
+/* vis-network：CDN 加载（图谱可视化，9 类边分色） */
 (function(){ var s=document.createElement('script');
-  s.src='/lib/echarts.min.js';
-  s.onerror=function(){ var c=document.createElement('script');
-    c.src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
-    document.head.appendChild(c); };
+  s.src='https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js';
   document.head.appendChild(s); })();
 </script>
 <style>
@@ -52,6 +49,38 @@
   .pill.question { background:#FFF3E0; color:#E65100; }
   .empty { color:var(--muted); font-size:13px; padding:12px 0; }
   #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:8px 18px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9; }
+  /* 边钻取面板 */
+  #edge-detail { position:fixed; right:20px; bottom:20px; width:300px; max-height:60vh; overflow:auto;
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,.12); display:none; z-index:10; }
+  #edge-detail.show { display:block; }
+  #edge-detail h3 { font-size:13px; margin-bottom:8px; }
+  #edge-detail .meta { font-size:12px; color:var(--muted); margin:4px 0; }
+  #edge-detail .rationale { font-size:13px; margin-top:8px; line-height:1.5; }
+  #edge-detail button { margin-top:8px; }
+  /* 诊断面板 */
+  .diag { margin-top:8px; }
+  .diag .tag { cursor:pointer; }
+  .diag .tag.orphan { color:#FAAD14; }
+  .diag .tag.contra { color:#EA6668; font-weight:600; }
+  /* 问答 */
+  #ask-result { margin-top:10px; }
+  #ask-result .ans { background:#FAFAF7; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; line-height:1.6; white-space:pre-wrap; }
+  #ask-result .cite { margin-top:8px; font-size:12px; color:var(--muted); }
+  #ask-result .cite b { color:var(--text); }
+  #ask-result .contra { margin-top:8px; padding:8px; background:#FFF0F0; border:1px solid #F5C2C4; border-radius:8px; font-size:12px; color:#B00020; }
+  /* 主动验证 */
+  .tabs { display:inline-flex; gap:2px; }
+  .tab { background:#ECEAF3; color:#666; }
+  .tab.active { background:var(--accent); color:#123; }
+  .verify-pane { margin-top:10px; }
+  #blind-reveal { margin-top:8px; padding:10px; background:#F0F7E8; border:1px solid #C7E3B0; border-radius:8px; font-size:13px; line-height:1.6; }
+  #feynman-result .score { font-size:20px; font-weight:600; }
+  #feynman-result .gaps { margin:6px 0; }
+  #feynman-result .gap { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; background:#FFE0E0; border:1px solid #F5C2C4; border-radius:10px; font-size:12px; color:#B00020; }
+  #feynman-result .fb { font-size:13px; color:var(--muted); margin-top:6px; }
+  #questions-result .q { padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:6px; font-size:13px; }
+  .mastery-bar { width:100%; height:8px; background:#EEE; border-radius:4px; overflow:hidden; margin-top:4px; }
+  .mastery-bar > span { display:block; height:100%; background:var(--accent); }
 </style>
 </head>
 <body>
@@ -62,7 +91,8 @@
 
 <main>
   <section class="card full">
-    <h2>知识图谱 <span id="graph-hint" style="font-weight:400;color:var(--muted);font-size:12px;">（点击节点聚焦，滚轮缩放）</span></h2>
+    <h2>知识图谱 <span id="graph-hint" style="font-weight:400;color:var(--muted);font-size:12px;">（点击节点聚焦，滚轮缩放；点击边看理由）</span></h2>
+    <div id="diag" class="diag" style="font-size:12px;"></div>
     <div id="graph"></div>
   </section>
 
@@ -98,7 +128,56 @@
     <div id="conflict-list"></div>
     <div class="row"><button class="gray" onclick="doSynthesize()">执行每周综合</button></div>
   </section>
+
+  <section class="card full">
+    <h2>对话问答 <span style="font-weight:400;color:var(--muted);font-size:12px;">（GraphRAG：召回→图扩展→冲突感知→引用溯源）</span></h2>
+    <div class="row">
+      <input type="text" id="ask-q" placeholder="对知识库提问，例：FSRS 是怎么决定复习间隔的？" style="flex:1;min-width:240px;">
+      <button onclick="doAsk()">提问</button>
+    </div>
+    <div id="ask-result"></div>
+  </section>
+
+  <section class="card full">
+    <h2>主动验证 <span id="mastery-tag" style="font-weight:400;color:var(--muted);font-size:12px;"></span></h2>
+    <div class="row">
+      <select id="verify-node" style="flex:1;min-width:200px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></select>
+      <div class="tabs" id="verify-tabs">
+        <button class="sm tab active" data-mode="blind">盲测</button>
+        <button class="sm tab" data-mode="feynman">Feynman</button>
+        <button class="sm tab" data-mode="questions">生成提问</button>
+      </div>
+    </div>
+
+    <div id="verify-blind" class="verify-pane">
+      <div class="empty" id="blind-target">先选择节点开始盲测。</div>
+      <textarea id="blind-input" placeholder="凭记忆复述该节点的内容（不看原文）…" style="display:none;"></textarea>
+      <div class="row" id="blind-actions" style="display:none;">
+        <button class="sm gray" onclick="blindReveal()">揭示原文</button>
+      </div>
+      <div id="blind-reveal" style="display:none;"></div>
+      <div class="row" id="blind-grade" style="display:none;">
+        <span style="font-size:12px;color:var(--muted);">自评记忆程度（同步调 FSRS）：</span>
+        <button class="sm" onclick="blindGrade('again')">again</button>
+        <button class="sm" onclick="blindGrade('hard')">hard</button>
+        <button class="sm" onclick="blindGrade('good')">good</button>
+        <button class="sm" onclick="blindGrade('easy')">easy</button>
+      </div>
+    </div>
+
+    <div id="verify-feynman" class="verify-pane" style="display:none;">
+      <textarea id="feynman-input" placeholder="用自己的话复述节点内容，LLM 会找出 gap…"></textarea>
+      <div class="row"><button onclick="doFeynman()">提交复述评分</button></div>
+      <div id="feynman-result"></div>
+    </div>
+
+    <div id="verify-questions" class="verify-pane" style="display:none;">
+      <div class="row"><button onclick="doQuestions()">生成 3 个检验提问</button></div>
+      <div id="questions-result"></div>
+    </div>
+  </section>
 </main>
+<div id="edge-detail"></div>
 <div id="toast"></div>
 
 <script>
@@ -120,24 +199,77 @@ async function loadStats(){
 
 let chart;
 const TYPE_COLOR = { concept:'#8BC8EA', claim:'#94D8C3', question:'#F4B393' };
-const CONFIRM_STYLE = { auto:{color:'#5B8DEF',width:2,type:'solid'}, approved:{color:'#2E7D32',width:2,type:'solid'},
-                        pending:{color:'#B26A00',width:2,type:'dashed'}, rejected:{color:'#ccc',width:1,type:'solid'} };
+/* 9 类命题边分色：矛盾红 / 支持 / 前提绿虚线 / 其他灰 */
+const EDGE_COLOR = {
+  contradicts:'#EA6668', supports:'#52C41A', prerequisite_of:'#2E7D32',
+  implies:'#5B8DEF', exemplifies:'#9C6ADE', refines:'#F4B139',
+  contrasts:'#795548', merges:'#00838F', relates:'#9E9E9E'
+};
 async function loadGraph(){
-  if(!chart){ chart = echarts.init($('#graph')); window.addEventListener('resize',()=>chart.resize()); }
+  if(!window.vis){ setTimeout(loadGraph, 200); return; }  // 等 CDN
   const {nodes, edges} = await api('/api/graph?root=1&depth=3');
-  if(!nodes.length){ $('#graph-hint').textContent='（暂无节点，先采集内容）'; chart.clear(); return; }
-  const g = {
-    tooltip:{confine:true},
-    series:[{ type:'graph', layout:'force', roam:true, draggable:true, label:{show:true,fontSize:11,color:'#333'},
-      force:{repulsion:320, edgeLength:[60,140]}, lineStyle:{curveness:0.12},
-      data: nodes.map(n=>({ id:n.id, name:n.title.length>14?n.title.slice(0,14)+'…':n.title,
-        symbolSize: n.type==='question'?34:26, itemStyle:{color:TYPE_COLOR[n.type]||'#ccc'}, value:n.title })),
-      links: edges.map(e=>({ source:e.src_id, target:e.dst_id, label:{show:true,formatter:e.rel_type,fontSize:9,color:'#999'},
-        lineStyle:CONFIRM_STYLE[e.confirm_status]||CONFIRM_STYLE.pending }))
-    }]
-  };
-  chart.setOption(g, true);
-  chart.off('click'); chart.on('click', p => { if(p.dataType==='node'){ loadGraph(); } });
+  const diag = await api('/api/diagnostics').catch(()=>({orphans:[],pending_edges:[],contradictions:[]}));
+  let html = '';
+  if(diag.orphans.length) html += `<span class="tag orphan" onclick="focusOrphan()">孤儿 ${diag.orphans.length} ·</span> `;
+  if(diag.pending_edges.length) html += `<span class="tag" style="color:#B26A00">待确认 ${diag.pending_edges.length} ·</span> `;
+  if(diag.contradictions.length) html += `<span class="tag contra" onclick="focusContradictions()">矛盾 ${diag.contradictions.length}</span>`;
+  $('#diag').innerHTML = html || '<span style="color:var(--muted)">图谱健康，无孤儿/矛盾</span>';
+  window._diag = diag;
+  if(!nodes.length){ $('#graph-hint').textContent='（暂无节点，先采集内容）'; if(chart) chart.destroy(); chart=null; return; }
+  const orphanIds = new Set(diag.orphans.map(n=>n.id));
+  const contraEdgeIds = new Set(diag.contradictions.map(e=>e.id));
+  const visNodes = nodes.map(n=>({
+    id:n.id, label:(n.title||'').slice(0,16),
+    color:{background:TYPE_COLOR[n.type]||'#ccc', border: orphanIds.has(n.id)?'#FAAD14':undefined,
+           highlight:{border:'#000'}},
+    shape: n.type==='question'?'diamond':'dot', size: n.type==='question'?28:18,
+  }));
+  const visEdges = edges.map(e=>{
+    const c = EDGE_COLOR[e.rel_type] || '#9E9E9E';
+    const w = Math.max(1, Math.round((e.confidence||0.5)*5));
+    const pending = e.confirm_status==='pending';
+    const contra = contraEdgeIds.has(e.id);
+    return { id:e.id, from:e.src_id, to:e.dst_id, label:e.rel_type, font:{size:9,color:c},
+      color:{color:c, highlight:c}, width:w, dashes: pending ? [4,4] : false,
+      arrows:{to:{enabled: e.rel_type!=='relates' && e.rel_type!=='merges'}},
+      title:`${e.rel_type} · conf=${e.confidence} · ${e.confirm_status}` + (contra?' [矛盾]':'')
+    };
+  });
+  const data = {nodes:new vis.DataSet(visNodes), edges:new vis.DataSet(visEdges)};
+  if(chart) chart.destroy();
+  chart = new vis.Network($('#graph'), data, {
+    physics:{stabilization:true, barnesHut:{gravitationalConstant:-3000}},
+    nodes:{font:{size:11,color:'#333'}}, edges:{smooth:{type:'dynamic'}},
+    interaction:{hover:true, tooltipDelay:120}
+  });
+  chart.on('click', p=>{
+    if(p.edges.length){ showEdgeDetail(p.edges[0]); }
+    else if(p.nodes.length){ window._net=p.nodes[0]; }
+  });
+}
+
+async function showEdgeDetail(eid){
+  const e = await api(`/api/edges`).then(r=>r.edges.find(x=>x.id===eid));
+  if(!e){ $('#edge-detail').classList.remove('show'); return; }
+  $('#edge-detail').innerHTML = `
+    <h3>${e.rel_type}</h3>
+    <div class="meta">置信度 ${(e.confidence||0).toFixed(2)} · 状态 ${e.confirm_status}</div>
+    <div class="meta">来源 #${e.src_id} → 目标 #${e.dst_id}</div>
+    <div class="rationale">${e.rationale||'（无理由）'}</div>
+    ${e.confirm_status==='pending' ? `<button class="sm" onclick="doConfirm(${e.id},'approve')">通过</button>
+      <button class="sm gray" onclick="doConfirm(${e.id},'reject')">驳回</button>` : ''}
+    <button class="sm gray" onclick="document.getElementById('edge-detail').classList.remove('show')">关闭</button>
+  `;
+  $('#edge-detail').classList.add('show');
+}
+
+function focusOrphan(){
+  const ids = (window._diag?.orphans||[]).map(n=>n.id);
+  if(ids.length && chart){ chart.selectNodes([ids[0]]); }
+}
+function focusContradictions(){
+  const eids = (window._diag?.contradictions||[]).map(e=>e.id);
+  if(eids.length){ showEdgeDetail(eids[0]); }
 }
 
 async function doIngest(){
@@ -242,7 +374,95 @@ async function doSynthesize(){
   catch(e){ toast('失败: '+e.message); }
 }
 
-(async function init(){ try{ await Promise.all([loadStats(),loadGraph(),loadRecall(),loadEdges(),loadConflicts()]); }catch(e){ toast('加载失败: '+e.message); } })();
+async function doAsk(){
+  const q = $('#ask-q').value.trim(); if(!q){ toast('请输入问题'); return; }
+  const box = $('#ask-result'); box.innerHTML='<div class="empty">正在召回并生成答案…</div>';
+  try{ const r = await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+    const cited = (r.cited_nodes||[]).map(n=>`<span class="pill concept" style="cursor:pointer" onclick="location.hash='';loadGraph();" title="${(n.body||'').slice(0,60)}">[#${n.id}] ${(n.title||'').slice(0,18)}</span>`).join(' ');
+    const contra = (r.contradictions||[]).length
+      ? `<div class="contra">存在矛盾：${r.contradictions.map(c=>`#${c.src_id} ↔ #${c.dst_id}（置信 ${c.confidence}）`).join('；')}</div>` : '';
+    box.innerHTML = `<div class="ans">${(r.answer||'').replace(/</g,'&lt;')}</div>
+      <div class="cite"><b>引用节点：</b>${cited||'无'}</div>${contra}`;
+  }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
+}
+
+/* 主动验证：节点选择器 + 模式切换 + 盲测/Feynman/生成提问 */
+let _verifyMode = 'blind';
+let _verifyCards = [];
+async function loadVerifyNodes(){
+  // 复用回取队列（到期+新卡），作为验证候选
+  const {cards} = await api('/api/recall?limit=50').catch(()=>({cards:[]}));
+  _verifyCards = cards;
+  const sel = $('#verify-node');
+  if(!cards.length){ sel.innerHTML='<option value="">（暂无到期节点）</option>'; return; }
+  sel.innerHTML = cards.map(c=>`<option value="${c.id}">[${c.id}] ${(c.title||'').slice(0,28)}</option>`).join('');
+  sel.onchange = () => switchVerifyNode(sel.value);
+  switchVerifyNode(sel.value);
+}
+function switchVerifyNode(nid){
+  if(!nid){
+    $('#blind-target').textContent='先选择节点开始盲测。';
+    ['#blind-input','#blind-actions','#blind-reveal','#blind-grade'].forEach(s=>$(s).style.display='none');
+    return;
+  }
+  // 盲测：只显示标题，不显示 body
+  const c = _verifyCards.find(x=>x.id==nid) || {};
+  const title = (c.title||'').slice(0,40);
+  $('#blind-target').innerHTML = `<div class="item"><span class="t">${title}</span><div class="b">（原文已隐藏，凭记忆复述）</div></div>`;
+  $('#blind-input').style.display='block'; $('#blind-input').value='';
+  $('#blind-actions').style.display='flex';
+  $('#blind-reveal').style.display='none'; $('#blind-reveal').innerHTML='';
+  $('#blind-grade').style.display='none';
+}
+async function blindReveal(){
+  const nid = $('#verify-node').value; if(!nid) return;
+  const c = _verifyCards.find(x=>x.id==nid);
+  if(!c){ toast('节点信息丢失，请刷新'); return; }
+  $('#blind-reveal').innerHTML = `<b>原文：</b>${(c.title||'').replace(/</g,'&lt;')}<br><span style="color:var(--muted)">${(c.body||'').replace(/</g,'&lt;')}</span>`;
+  $('#blind-reveal').style.display='block';
+  $('#blind-grade').style.display='flex';
+}
+async function blindGrade(rating){
+  const nid = $('#verify-node').value; if(!nid) return;
+  try{ await api(`/api/recall/${nid}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
+    toast(`盲测自评 ${rating} 已同步 FSRS`); await Promise.all([loadRecall(),loadStats(),loadMastery()]); }
+  catch(e){ toast('失败: '+e.message); }
+}
+async function doFeynman(){
+  const nid = $('#verify-node').value; if(!nid){ toast('请选节点'); return; }
+  const p = $('#feynman-input').value.trim(); if(!p){ toast('请输入复述'); return; }
+  const box = $('#feynman-result'); box.innerHTML='<div class="empty">评分中…</div>';
+  try{ const r = await api('/api/verify/feynman',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nid:+nid,paraphrase:p})});
+    const gaps = (r.gaps||[]).map(g=>`<span class="gap">${(g+'').replace(/</g,'&lt;')}</span>`).join('');
+    box.innerHTML = `<div class="score">${(r.score*100).toFixed(0)} 分</div>
+      <div class="gaps">${gaps?'缺失/出错：'+gaps:'无明显 gap'}</div>
+      <div class="fb">${(r.feedback||'').replace(/</g,'&lt;')}</div>`;
+    await loadMastery();
+  }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
+}
+async function doQuestions(){
+  const nid = $('#verify-node').value; if(!nid){ toast('请选节点'); return; }
+  const box = $('#questions-result'); box.innerHTML='<div class="empty">生成中…</div>';
+  try{ const r = await api('/api/verify/questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nid:+nid,n:3})});
+    box.innerHTML = (r.questions||[]).map((q,i)=>`<div class="q">${i+1}. ${(q+'').replace(/</g,'&lt;')}</div>`).join('') || '<div class="empty">无</div>';
+  }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
+}
+async function loadMastery(){
+  try{ const m = await api('/api/mastery');
+    $('#mastery-tag').textContent = `· 总掌握度 ${(m.avg*100).toFixed(0)}% · 已验证 ${m.verified}/${m.total}`;
+  }catch(e){ /* 静默 */ }
+}
+document.addEventListener('click', e=>{
+  const t = e.target.closest('.tab'); if(!t) return;
+  document.querySelectorAll('#verify-tabs .tab').forEach(b=>b.classList.remove('active'));
+  t.classList.add('active');
+  _verifyMode = t.dataset.mode;
+  ['#verify-blind','#verify-feynman','#verify-questions'].forEach(s=>$(s).style.display='none');
+  const pane = {blind:'#verify-blind', feynman:'#verify-feynman', questions:'#verify-questions'}[_verifyMode];
+  if(pane) $(pane).style.display='block';
+});
+
+(async function init(){ try{ await Promise.all([loadStats(),loadGraph(),loadRecall(),loadEdges(),loadConflicts(),loadVerifyNodes(),loadMastery()]); }catch(e){ toast('加载失败: '+e.message); } })();
 </script>
 </body>
 </html>

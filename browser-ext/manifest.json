@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "knowledge-engine 采集",
+  "version": "0.1.0",
+  "description": "右键选中文本一键采集到本地 knowledge-engine。",
+  "permissions": ["contextMenus", "storage", "notifications"],
+  "host_permissions": ["http://127.0.0.1:8000/*", "http://localhost:8000/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "knowledge-engine 设置"
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}

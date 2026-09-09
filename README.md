@@ -2,9 +2,9 @@
 
 多源采集（文本 / 链接 / 音频）→ AI 原子化 → 依据知识科学理论构建持续生长的个人知识网络。
 
-## 当前状态：MVP v0.1 已可运行
+## 当前状态：MVP v0.2 已可运行
 
-本地优先、单文件 SQLite（含向量检索与全文索引）的知识网络引擎。**无需任何 API key 即可跑通完整闭环**：采集 → 原子化 → 科学建链 → 间隔重复回取 → 综合 → 冲突检测。
+本地优先、单文件 SQLite（含向量检索与全文索引）的知识网络引擎。**无需任何 API key 即可跑通完整闭环**：采集 → 原子化 → 科学建链 → 间隔重复回取 → 综合 → 冲突检测 → 对话问答 → 主动验证（Feynman）。
 
 ## 快速开始
 
@@ -19,15 +19,20 @@ ke recall                   # 今日到期回取卡片
 ke review 1 good            # 评分：again / hard / good / easy
 ke synthesize               # 每周综合（连通分量 → 综述 → 新节点挂回图）
 ke conflicts                # 矛盾检测报告
-ke stats                    # 指标面板
-ke serve --port 8000        # Web 面板（图谱 / 采集 / 回取 / 建议箱 / 矛盾）
+ke stats                    # 指标面板（含掌握度 mastery_avg / Feynman 次数）
+ke serve --port 8000        # Web 面板（图谱 / 采集 / 回取 / 建议箱 / 矛盾 / 问答 / 主动验证）
 ```
+
+Web 面板新增模块：
+- **对话问答**：GraphRAG 召回 → 图扩展 → 冲突感知 → 强制引用溯源 `[#节点id]`，rule 模式降级为节点列表
+- **主动验证**：三种模式 — 盲测（纯前端隐藏原文 + 自评调 FSRS）/ Feynman（用户复述 → LLM 找 gap + 评分 + 落库）/ 生成提问（LLM 针对节点生成开放式检验提问）
+- **掌握度指标**：FSRS 保留度（reps/stability）+ Feynman 平均分加权，输出 per-node 与全库分级分布
 
 ## 核心思想
 
-- **采集不是壁垒**：5 类源（浏览器、剪贴板、飞书、链接提取、音频转写）通过适配器模式增量扩展，多模态输入统一为"文本中间态"
+- **采集不是壁垒**：5 类源（浏览器、剪贴板、飞书、链接提取、音频转写 + 图片 OCR）通过适配器模式增量扩展，多模态输入统一为"文本中间态"
 - **科学建链**：网络 = 原子节点 + 9 类命题化有向边 + 前提 DAG，每条边可解释、可审计，拒绝"相似就拉线"
-- **生长是主引擎**：FSRS 每日回取 + 每周社区综合 + 冲突检测，北极星指标是回取率而非存储量
+- **生长是主引擎**：FSRS 每日回取 + 每周社区综合 + 冲突检测 + Feynman 主动验证，北极星指标是掌握度而非存储量
 
 ## 科学依据
 
@@ -51,6 +56,7 @@ ke serve --port 8000        # Web 面板（图谱 / 采集 / 回取 / 建议箱 
 - `sources` — 原始材料（kind: url/clipboard/message/file/audio/synthesis + 指纹去重）
 - `nodes` — 原子笔记（concept/claim/question + FSRS 记忆状态）
 - `edges` — 9 类命题边（implies/supports/contradicts/exemplifies/refines/prerequisite_of/contrasts/merges/relates）
+- `verifications` — 主动验证留痕（mode: feynman/recall/generative + paraphrase/gaps/score/feedback）
 - `node_vec`（vec0 向量 KNN）+ `node_fts`（trigram 全文）— 双路召回
 - 图查询：递归 CTE，不引入图数据库（迁移触发器：节点 >10⁵ 或需实时图算法）
 
@@ -99,11 +105,13 @@ pip install funasr modelscope    # 音频转写（中文优化，本地推理）
 ## 测试
 
 ```bash
-python -m pytest tests/ -q        # 11 个用例：存储/流水线/建链/回取
+python -m pytest tests/ -q        # 44+ 用例：存储/流水线/建链/回取/问答/主动验证/成熟度（9 类边 ×门控 ×DAG ×综合 ×矛盾 ×指标 ×孤儿）
+bash scripts/smoke.sh             # 端到端冒烟：采集→建链→回取→综合→矛盾→指标
 ```
 
 ## 文档
 
+- `docs/architecture.md` — 架构与数据模型、9 类边定义、建链门控、FSRS/GraphRAG/Feynman 机制、API 速查
 - `docs/knowledge-system-mvp-plan.html` — MVP 架构与落地方案 v1.1（技术选型、建链引擎、生长机制、10 周路线图、30 天验收指标、风险对策）
 
 ## 打包：桌面端 / Web 端
@@ -131,4 +139,4 @@ python -m pytest tests/ -q        # 11 个用例：存储/流水线/建链/回�
 
 ## License
 
-Private / 内部使用
+MIT — 见 [LICENSE](LICENSE)。开源可自由使用、修改、分发。

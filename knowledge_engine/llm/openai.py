@@ -95,3 +95,63 @@ class OpenAIProvider(LLMProvider):
         except Exception:
             from .rule import RuleProvider
             return RuleProvider().synthesize(nodes, topic)
+
+    def answer(self, question: str, context_nodes: list[dict], contradictions: list[dict] | None = None) -> str:
+        """GraphRAG 问答：强制引用节点 id 溯源，冲突感知。"""
+        context = "\n\n".join(
+            f"[#{n['id']}] {n.get('title','')}\n{n.get('body','')}" for n in context_nodes)
+        contra = ""
+        if contradictions:
+            contra = "\n\n矛盾（需在答案中标注）：\n" + "\n".join(
+                f"- #{c['src_id']} ↔ #{c['dst_id']}（置信 {c.get('confidence',0)}）" for c in contradictions)
+        sys = (
+            "你是知识库问答助手。基于以下知识节点回答用户问题。"
+            "规则：1) 每个事实陈述后用 [#节点id] 标注来源；"
+            "2) 若节点间存在矛盾，明确指出“A 说 X，但 B 说 Y”并标注两侧 id；"
+            "3) 不要编造未在节点中出现的信息；4) 答案简洁。"
+        )
+        user = f"知识节点：\n{context}{contra}\n\n问题：{question}"
+        try:
+            return self._chat(sys, user, json_mode=False)
+        except Exception:
+            from .rule import RuleProvider
+            return RuleProvider().answer(question, context_nodes, contradictions)
+
+    def feynman(self, node: dict, paraphrase: str) -> dict:
+        """Feynman：LLM 比较用户复述 vs 节点原文，输出 {score, gaps, feedback}。"""
+        sys = (
+            "你是费曼学习法教练。给定一个知识节点原文与用户复述，"
+            "评估复述的准确性与完整度。输出 JSON："
+            "{\"score\":0.0-1.0(准确度),\"gaps\":[缺失/错误的关键点],\"feedback\":\"一句话总评\"}。"
+            "只输出 JSON。"
+        )
+        user = (f"节点原文：\n标题：{node.get('title','')}\n内容：{node.get('body','')}\n\n"
+                f"用户复述：\n{paraphrase}")
+        try:
+            out = self._chat(sys, user)
+            data = json.loads(out)
+            return {
+                "score": round(float(data.get("score", 0.5)), 2),
+                "gaps": [str(g)[:80] for g in (data.get("gaps") or [])][:5],
+                "feedback": str(data.get("feedback", ""))[:200],
+            }
+        except Exception:
+            from .rule import RuleProvider
+            return RuleProvider().feynman(node, paraphrase)
+
+    def generate_questions(self, node: dict, n: int = 3) -> list[str]:
+        """生成 N 个针对节点的检验提问。"""
+        sys = (
+            "你是教学提问设计专家。针对给定知识节点，生成开放式检验提问，"
+            "用于主动回忆与生成式学习。要求：1) 不问是非；2) 引发复述/类比/反例；"
+            f"3) 输出 JSON：{{\"items\":[\"问题1\",\"问题2\",...]}}，恰好 {n} 条。只输出 JSON。"
+        )
+        user = f"节点：\n类型：{node.get('type','claim')}\n标题：{node.get('title','')}\n内容：{node.get('body','')}"
+        try:
+            out = self._chat(sys, user)
+            data = json.loads(out)
+            items = data.get("items") if isinstance(data, dict) else data
+            return [str(q)[:120] for q in (items or [])][:n]
+        except Exception:
+            from .rule import RuleProvider
+            return RuleProvider().generate_questions(node, n)

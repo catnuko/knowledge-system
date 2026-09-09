@@ -36,6 +36,20 @@ class ConflictResolveIn(BaseModel):
     action: str  # keep | archive_a | archive_b
 
 
+class AskIn(BaseModel):
+    question: str
+
+
+class FeynmanIn(BaseModel):
+    nid: int
+    paraphrase: str
+
+
+class QuestionsIn(BaseModel):
+    nid: int
+    n: int = 3
+
+
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or Config()
     app = FastAPI(title="knowledge-engine", docs_url=None, redoc_url=None)
@@ -59,6 +73,29 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         try:
             nodes, edges = db.subgraph(con, root, depth)
             return {"nodes": nodes, "edges": edges}
+        finally:
+            con.close()
+
+    @app.get("/api/diagnostics")
+    def api_diagnostics():
+        """图谱诊断：孤儿节点 + pending 边 + 矛盾边，前端用于高亮排查。"""
+        con = _con()
+        try:
+            orphans = [dict(r) for r in con.execute(
+                """SELECT id, type, title, status FROM nodes n
+                   WHERE n.status IN ('active','pending_link')
+                   AND NOT EXISTS (SELECT 1 FROM edges e
+                                   WHERE (e.src_id=n.id OR e.dst_id=n.id)
+                                   AND e.confirm_status!='rejected')""").fetchall()]
+            pending = [dict(r) for r in con.execute(
+                """SELECT id, src_id, dst_id, rel_type, confidence
+                   FROM edges WHERE confirm_status='pending' ORDER BY id""").fetchall()]
+            contradictions = [dict(r) for r in con.execute(
+                """SELECT id, src_id, dst_id, confidence
+                   FROM edges WHERE rel_type='contradicts'
+                   AND confirm_status!='rejected' ORDER BY id""").fetchall()]
+            return {"orphans": orphans, "pending_edges": pending,
+                    "contradictions": contradictions}
         finally:
             con.close()
 
@@ -141,6 +178,51 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             Path(path).unlink(missing_ok=True)
             con.close()
 
+    @app.post("/api/ingest/image")
+    async def api_ingest_image(file: UploadFile = File(...)):
+        from ..ingest.pipeline import ingest_image
+        if not (file.filename or "").lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp")):
+            raise HTTPException(400, "仅支持图片文件：png/jpg/jpeg/webp/bmp")
+        path = await _save_upload(file)
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return ingest_image(con, path, provider=provider, cfg=cfg)
+        except RuntimeError as e:
+            raise HTTPException(422, str(e))
+        finally:
+            Path(path).unlink(missing_ok=True)
+            con.close()
+
+    @app.get("/api/timeline")
+    def api_timeline(date: str | None = None, limit: int = 200):
+        """按日分组的来源时间线。date=YYYY-MM-DD 过滤当天；不传返回最近 limit 条。"""
+        con = _con()
+        try:
+            if date:
+                rows = con.execute(
+                    """SELECT id, kind, title, raw_path, captured_at
+                       FROM sources
+                       WHERE date(captured_at) = date(?)
+                       ORDER BY captured_at DESC LIMIT ?""",
+                    (date, limit),
+                ).fetchall()
+            else:
+                rows = con.execute(
+                    """SELECT id, kind, title, raw_path, captured_at
+                       FROM sources ORDER BY captured_at DESC LIMIT ?""",
+                    (limit,),
+                ).fetchall()
+            items = [dict(r) for r in rows]
+            # 按日分组
+            grouped: dict[str, list] = {}
+            for it in items:
+                day = (it.get("captured_at") or "")[:10]
+                grouped.setdefault(day, []).append(it)
+            return {"days": [{"date": d, "items": grouped[d]} for d in sorted(grouped, reverse=True)]}
+        finally:
+            con.close()
+
     @app.get("/api/recall")
     def api_recall(limit: int = 20):
         from ..growth.recall import due_cards
@@ -189,6 +271,79 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         try:
             provider = get_provider(cfg)
             return weekly_synthesis(con, provider)
+        finally:
+            con.close()
+
+    @app.post("/api/ask")
+    def api_ask(body: AskIn):
+        """GraphRAG 问答：召回 + 图扩展 + 冲突感知 + provider.answer。"""
+        from ..growth.qa import ask
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return ask(con, body.question, provider=provider, cfg=cfg)
+        finally:
+            con.close()
+
+    @app.post("/api/verify/feynman")
+    def api_feynman(body: FeynmanIn):
+        """Feynman 验证：用户复述 → LLM 找 gap → 落库 → 返回 score/gaps/feedback。"""
+        from ..growth.verify import feynman
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            return feynman(con, body.nid, body.paraphrase, provider=provider, cfg=cfg)
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        finally:
+            con.close()
+
+    @app.post("/api/verify/questions")
+    def api_questions(body: QuestionsIn):
+        """针对节点生成 n 个开放式检验提问（生成式提问）。"""
+        from ..growth.verify import generate_questions
+        con = _con()
+        try:
+            provider = get_provider(cfg)
+            qs = generate_questions(con, body.nid, body.n, provider=provider, cfg=cfg)
+            return {"nid": body.nid, "questions": qs}
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        finally:
+            con.close()
+
+    @app.get("/api/verify/history/{nid}")
+    def api_verify_history(nid: int, mode: str | None = None, limit: int = 20):
+        """节点的验证历史。"""
+        con = _con()
+        try:
+            from .. import db as _db
+            rows = _db.list_verifications(con, nid, mode=mode, limit=limit)
+            return {"history": [dict(r) for r in rows]}
+        except Exception as e:
+            raise HTTPException(500, str(e))
+        finally:
+            con.close()
+
+    @app.get("/api/mastery")
+    def api_mastery():
+        """知识库总体掌握度：平均分 + 分级分布 + 已验证节点数。"""
+        from ..growth.verify import all_mastery
+        con = _con()
+        try:
+            return all_mastery(con)
+        finally:
+            con.close()
+
+    @app.get("/api/mastery/{nid}")
+    def api_node_mastery(nid: int):
+        """单节点掌握度。"""
+        from ..growth.verify import node_mastery
+        con = _con()
+        try:
+            return node_mastery(con, nid)
+        except Exception as e:
+            raise HTTPException(500, str(e))
         finally:
             con.close()
 
