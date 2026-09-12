@@ -1,0 +1,25 @@
+# 发版自动化（release-please）：
+# - 日常 push 到 main 后，根据 Conventional Commits（feat/fix/…）自动维护发版 PR；
+# - 发版 PR 会自动升级版本号（pyproject.toml / desktop/package.json /
+#   desktop/src-tauri/tauri.conf.json / Cargo.toml）并追加 CHANGELOG.md；
+# - 该 PR 合并时自动创建 tag vX.Y.Z 与 GitHub Release（含发布说明），
+#   并触发 .github/workflows/release.yml 构建桌面端产物上传到该 Release。
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
