@@ -4,411 +4,678 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>knowledge-engine · 知识网络</title>
-<script>
-/* vis-network：CDN 加载（图谱可视化，9 类边分色） */
-(function(){ var s=document.createElement('script');
-  s.src='https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js';
-  document.head.appendChild(s); })();
-</script>
+<script src="lib/vis-network.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js';document.head.appendChild(s);"></script>
 <style>
-  :root { --text:#1A1B1C; --muted:#6B7280; --bg:#F4F3EE; --card:#FFFFFF; --border:#E4E3DD;
-          --accent:#8BC8EA; --ok:#52C41A; --warn:#FAAD14; --err:#EA6668; }
+  :root {
+    --bg:#F6F7F9; --card:#FFFFFF; --border:#E7E9EE; --text:#17181C; --muted:#7A8190;
+    --accent:#6366F1; --accent-weak:#EEF0FF; --accent-text:#4F46E5;
+    --ok:#16A34A; --ok-weak:#EAF7EF; --warn:#D97706; --warn-weak:#FEF5E7;
+    --err:#DC2626; --err-weak:#FDECEC;
+    --side:#12141C; --side-text:#9AA1B2; --side-active:#FFFFFF;
+    --radius:16px; --radius-sm:10px;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.06);
+  }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
-  header { padding:16px 20px; background:var(--card); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  header h1 { font-size:18px; font-weight:600; }
-  header .tag { font-size:12px; color:var(--muted); }
-  #stats { display:flex; gap:12px; flex-wrap:wrap; margin-left:auto; }
-  .stat { text-align:center; min-width:64px; }
-  .stat b { display:block; font-size:18px; }
-  .stat span { font-size:11px; color:var(--muted); }
-  main { display:grid; grid-template-columns: repeat(auto-fit,minmax(300px,1fr)); gap:16px; padding:16px 20px; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; }
-  .card h2 { font-size:14px; font-weight:600; margin-bottom:10px; }
-  .full { grid-column: 1 / -1; }
-  #graph { width:100%; height:420px; }
-  textarea { width:100%; height:110px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:13px; resize:vertical; font-family:inherit; }
-  input[type=text] { width:100%; padding:7px 8px; border:1px solid var(--border); border-radius:8px; font-size:13px; }
-  button { padding:7px 14px; border:none; border-radius:8px; background:var(--accent); color:#123; font-size:13px; cursor:pointer; }
-  button:hover { opacity:.85; }
-  button.sm { padding:4px 10px; font-size:12px; }
-  button.gray { background:#ECEAF3; color:#444; }
-  .up { display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border:1px dashed var(--border);
-        border-radius:8px; background:#FAFAF7; color:#444; font-size:13px; cursor:pointer; }
-  .up:hover { border-color:var(--accent); color:#123; }
-  .up input[type=file] { display:none; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; }
-  .item { border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; }
-  .item .t { font-weight:600; font-size:13px; }
-  .item .b { color:var(--muted); font-size:12px; margin-top:4px; }
-  .pill { display:inline-block; font-size:11px; padding:1px 8px; border-radius:10px; margin-left:6px; }
-  .pill.auto { background:#E7F5E7; color:#2E7D32; }
-  .pill.pending { background:#FFF4E0; color:#B26A00; }
-  .pill.concept { background:#E3F2FD; color:#1565C0; }
-  .pill.claim { background:#E8F5E9; color:#2E7D32; }
-  .pill.question { background:#FFF3E0; color:#E65100; }
-  .empty { color:var(--muted); font-size:13px; padding:12px 0; }
-  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:8px 18px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9; }
-  /* 边钻取面板 */
-  #edge-detail { position:fixed; right:20px; bottom:20px; width:300px; max-height:60vh; overflow:auto;
-    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; box-shadow:0 4px 16px rgba(0,0,0,.12); display:none; z-index:10; }
-  #edge-detail.show { display:block; }
-  #edge-detail h3 { font-size:13px; margin-bottom:8px; }
-  #edge-detail .meta { font-size:12px; color:var(--muted); margin:4px 0; }
-  #edge-detail .rationale { font-size:13px; margin-top:8px; line-height:1.5; }
-  #edge-detail button { margin-top:8px; }
-  /* 诊断面板 */
-  .diag { margin-top:8px; }
-  .diag .tag { cursor:pointer; }
-  .diag .tag.orphan { color:#FAAD14; }
-  .diag .tag.contra { color:#EA6668; font-weight:600; }
-  /* 问答 */
-  #ask-result { margin-top:10px; }
-  #ask-result .ans { background:#FAFAF7; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; line-height:1.6; white-space:pre-wrap; }
-  #ask-result .cite { margin-top:8px; font-size:12px; color:var(--muted); }
-  #ask-result .cite b { color:var(--text); }
-  #ask-result .contra { margin-top:8px; padding:8px; background:#FFF0F0; border:1px solid #F5C2C4; border-radius:8px; font-size:12px; color:#B00020; }
-  /* 主动验证 */
-  .tabs { display:inline-flex; gap:2px; }
-  .tab { background:#ECEAF3; color:#666; }
-  .tab.active { background:var(--accent); color:#123; }
-  .verify-pane { margin-top:10px; }
-  #blind-reveal { margin-top:8px; padding:10px; background:#F0F7E8; border:1px solid #C7E3B0; border-radius:8px; font-size:13px; line-height:1.6; }
-  #feynman-result .score { font-size:20px; font-weight:600; }
-  #feynman-result .gaps { margin:6px 0; }
-  #feynman-result .gap { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; background:#FFE0E0; border:1px solid #F5C2C4; border-radius:10px; font-size:12px; color:#B00020; }
-  #feynman-result .fb { font-size:13px; color:var(--muted); margin-top:6px; }
-  #questions-result .q { padding:8px 10px; border:1px solid var(--border); border-radius:8px; margin-bottom:6px; font-size:13px; }
-  .mastery-bar { width:100%; height:8px; background:#EEE; border-radius:4px; overflow:hidden; margin-top:4px; }
-  .mastery-bar > span { display:block; height:100%; background:var(--accent); }
+  html,body { height:100%; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+         background:var(--bg); color:var(--text); font-size:14px; line-height:1.55; display:flex; overflow:hidden; }
+
+  /* ---------- 侧边栏 ---------- */
+  aside { width:224px; flex-shrink:0; background:var(--side); color:var(--side-text);
+          display:flex; flex-direction:column; padding:20px 12px 16px; }
+  .brand { display:flex; align-items:center; gap:10px; padding:4px 10px 20px; }
+  .brand .logo { width:34px; height:34px; border-radius:10px; flex-shrink:0;
+    background:linear-gradient(135deg,#6366F1,#8B5CF6); display:grid; place-items:center; color:#fff; font-weight:700; font-size:15px; }
+  .brand b { color:#fff; font-size:15px; font-weight:600; display:block; line-height:1.2; }
+  .brand span { font-size:11px; opacity:.7; }
+  nav { flex:1; display:flex; flex-direction:column; gap:2px; }
+  nav a { display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:10px; cursor:pointer;
+          color:var(--side-text); font-size:13.5px; font-weight:500; transition:all .15s; user-select:none; }
+  nav a:hover { color:#D7DBE6; background:rgba(255,255,255,.05); }
+  nav a.active { color:var(--side-active); background:rgba(99,102,241,.28); }
+  nav a svg { width:17px; height:17px; flex-shrink:0; }
+  nav a .nav-badge { margin-left:auto; background:var(--accent); color:#fff; font-size:11px; font-weight:600;
+                     min-width:18px; text-align:center; padding:0 5px; border-radius:9px; }
+  nav a .nav-badge:empty { display:none; }
+  .side-foot { padding:12px 10px 2px; border-top:1px solid rgba(255,255,255,.08); display:flex; align-items:center; gap:10px; }
+  .mastery-ring { --p:0; width:36px; height:36px; border-radius:50%; flex-shrink:0;
+    background:conic-gradient(var(--accent) calc(var(--p)*1%), rgba(255,255,255,.12) 0); display:grid; place-items:center; }
+  .mastery-ring::before { content:""; width:26px; height:26px; border-radius:50%; background:var(--side); }
+  .mastery-ring b { position:absolute; font-size:9px; color:#fff; }
+  .side-foot .m { line-height:1.3; font-size:11px; }
+  .side-foot .m b { display:block; color:#fff; font-size:13px; font-weight:600; }
+  .side-foot .m span { opacity:.65; }
+
+  /* ---------- 主区 ---------- */
+  main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { display:flex; align-items:center; gap:16px; padding:18px 28px 0; }
+  .topbar h1 { font-size:20px; font-weight:700; letter-spacing:-.01em; }
+  .chips { margin-left:auto; display:flex; gap:8px; }
+  .chip { background:var(--card); border:1px solid var(--border); border-radius:99px; padding:4px 13px;
+          font-size:12.5px; color:var(--muted); display:flex; align-items:center; gap:6px; box-shadow:var(--shadow); }
+  .chip b { color:var(--text); font-weight:600; }
+  .chip.hot b { color:var(--accent-text); }
+  .views { flex:1; overflow-y:auto; padding:20px 28px 32px; }
+  .view { display:none; max-width:1280px; margin:0 auto; }
+  .view.active { display:block; animation:fadein .18s ease; }
+  @keyframes fadein { from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  /* ---------- 通用组件 ---------- */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+  .card h2 { font-size:14.5px; font-weight:650; display:flex; align-items:center; gap:8px; }
+  .card h2 .hint { font-weight:400; color:var(--muted); font-size:12px; }
+  .card h2 .spacer { flex:1; }
+  .grid { display:grid; gap:16px; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 16px; border:none; border-radius:var(--radius-sm);
+         background:var(--accent); color:#fff; font-size:13px; font-weight:550; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn:active { transform:translateY(1px); }
+  .btn.ghost { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn.ghost:hover { background:#F3F4F6; filter:none; }
+  .btn.danger { background:var(--err-weak); color:var(--err); }
+  .btn.sm { padding:5px 12px; font-size:12.5px; border-radius:9px; }
+  .btn kbd { font-size:10px; opacity:.75; border:1px solid rgba(255,255,255,.35); border-radius:4px; padding:0 4px; font-family:inherit; }
+  .btn.ghost kbd { border-color:var(--border); color:var(--muted); }
+  textarea, input[type=text], select { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:var(--radius-sm);
+    font-size:13.5px; font-family:inherit; background:var(--card); color:var(--text); transition:border .15s, box-shadow .15s; }
+  textarea:focus, input:focus, select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(99,102,241,.14); }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .pill { display:inline-flex; align-items:center; font-size:11px; font-weight:550; padding:2px 9px; border-radius:99px; }
+  .pill.auto { background:var(--ok-weak); color:var(--ok); }
+  .pill.pending { background:var(--warn-weak); color:var(--warn); }
+  .pill.err { background:var(--err-weak); color:var(--err); }
+  .pill.concept { background:#E8F0FE; color:#1A56DB; }
+  .pill.claim { background:var(--ok-weak); color:var(--ok); }
+  .pill.question { background:var(--warn-weak); color:var(--warn); }
+  .item { border:1px solid var(--border); border-radius:12px; padding:13px 14px; margin-top:10px; transition:border .15s; }
+  .item:hover { border-color:#D4D8E1; }
+  .item .t { font-weight:600; font-size:13.5px; }
+  .item .b { color:var(--muted); font-size:12.5px; margin-top:5px; }
+  .empty { color:var(--muted); font-size:13px; padding:18px 0; text-align:center; }
+  .muted { color:var(--muted); font-size:12.5px; }
+
+  /* ---------- 仪表盘 ---------- */
+  .stats-row { display:grid; grid-template-columns:repeat(6,1fr); gap:14px; margin-bottom:16px; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+  .stat-card b { display:block; font-size:24px; font-weight:700; letter-spacing:-.02em; }
+  .stat-card span { font-size:12px; color:var(--muted); }
+  .stat-card.hot b { color:var(--accent-text); }
+  .dash-main { display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start; }
+  #graph-dashboard { height:480px; border-radius:12px; }
+  .rail .card { margin-bottom:14px; padding:16px; }
+
+  /* ---------- 图谱视图 ---------- */
+  #diag-bar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .diag-chip { font-size:12px; padding:4px 12px; border-radius:99px; border:1px solid var(--border); background:var(--card); cursor:pointer; color:var(--muted); }
+  .diag-chip:hover { border-color:var(--accent); color:var(--accent-text); }
+  .diag-chip.warn { background:var(--warn-weak); border-color:transparent; color:var(--warn); }
+  .diag-chip.err { background:var(--err-weak); border-color:transparent; color:var(--err); }
+  #graph-full { height:calc(100vh - 250px); min-height:440px; border-radius:12px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:11.5px; color:var(--muted); }
+  .legend i { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
+
+  /* ---------- 采集 ---------- */
+  .ingest-grid { display:grid; grid-template-columns:1.4fr 1fr; gap:16px; align-items:start; }
+  #drop { border:1.5px dashed var(--border); border-radius:var(--radius-sm); padding:22px; text-align:center;
+          color:var(--muted); font-size:13px; cursor:pointer; transition:all .15s; margin-top:10px; }
+  #drop:hover, #drop.over { border-color:var(--accent); color:var(--accent-text); background:var(--accent-weak); }
+  #drop input { display:none; }
+  .actions-card .row { margin-top:12px; }
+
+  /* ---------- 复习（闪卡） ---------- */
+  .flash-wrap { max-width:680px; margin:0 auto; }
+  .progress { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .progress .bar { flex:1; height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .progress .bar span { display:block; height:100%; background:var(--accent); border-radius:3px; transition:width .3s; }
+  .flash { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:40px 44px; min-height:280px;
+           box-shadow:var(--shadow); display:flex; flex-direction:column; justify-content:center; gap:16px; }
+  .flash .type-row { display:flex; gap:8px; align-items:center; }
+  .flash h3 { font-size:20px; font-weight:700; letter-spacing:-.01em; line-height:1.4; }
+  .flash .body { font-size:14.5px; color:#3B4252; line-height:1.7; white-space:pre-wrap; }
+  .flash .reveal-hint { color:var(--muted); font-size:13px; }
+  .grade-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:18px; }
+  .grade-row .btn { flex-direction:column; padding:12px 8px; gap:2px; }
+  .grade-again { background:var(--err-weak); color:var(--err); }
+  .grade-hard { background:var(--warn-weak); color:var(--warn); }
+  .grade-good { background:var(--ok-weak); color:var(--ok); }
+  .grade-easy { background:var(--accent-weak); color:var(--accent-text); }
+  .grade-row .btn:hover { filter:brightness(.97); }
+
+  /* ---------- 验证 ---------- */
+  .mode-tabs { display:inline-flex; background:#F1F2F6; border-radius:11px; padding:3px; gap:2px; }
+  .mode-tabs .tab { padding:6px 16px; border:none; background:transparent; border-radius:9px; font-size:13px; font-weight:550;
+                    color:var(--muted); cursor:pointer; transition:all .15s; }
+  .mode-tabs .tab.active { background:var(--card); color:var(--text); box-shadow:0 1px 4px rgba(16,24,40,.12); }
+  .score-ring { font-size:32px; font-weight:800; letter-spacing:-.03em; }
+  .gap-tag { display:inline-block; margin:3px 5px 3px 0; padding:3px 10px; background:var(--err-weak); border-radius:99px; font-size:12px; color:var(--err); }
+
+  /* ---------- 问答 ---------- */
+  .chat-wrap { max-width:820px; margin:0 auto; display:flex; flex-direction:column; gap:14px; min-height:calc(100vh - 280px); }
+  #chat-log { flex:1; display:flex; flex-direction:column; gap:14px; }
+  .bubble { max-width:85%; padding:13px 17px; border-radius:16px; font-size:13.5px; line-height:1.65; white-space:pre-wrap; }
+  .bubble.user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:5px; }
+  .bubble.bot { align-self:flex-start; background:var(--card); border:1px solid var(--border); box-shadow:var(--shadow); border-bottom-left-radius:5px; }
+  .bubble .cite { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .bubble .cite .pill { cursor:pointer; }
+  .bubble .contra { margin-top:9px; padding:8px 12px; background:var(--err-weak); border-radius:9px; font-size:12.5px; color:var(--err); }
+  .chat-input { display:flex; gap:10px; margin-top:auto; }
+
+  /* ---------- 抽屉（边详情） ---------- */
+  #drawer-mask { position:fixed; inset:0; background:rgba(15,17,26,.32); opacity:0; pointer-events:none; transition:opacity .2s; z-index:50; }
+  #drawer-mask.show { opacity:1; pointer-events:auto; }
+  #drawer { position:fixed; top:0; right:-380px; width:360px; height:100%; background:var(--card); z-index:51;
+            box-shadow:-8px 0 32px rgba(16,24,40,.14); transition:right .22s ease; padding:24px; overflow-y:auto; }
+  #drawer.show { right:0; }
+  #drawer h3 { font-size:16px; font-weight:700; margin-bottom:4px; }
+  #drawer .meta { font-size:12.5px; color:var(--muted); margin:10px 0 4px; }
+  #drawer .rationale { margin-top:12px; padding:13px; background:#F8F9FB; border-radius:12px; font-size:13px; line-height:1.6; }
+  #drawer .row { margin-top:16px; }
+
+  /* ---------- toast ---------- */
+  #toast { position:fixed; bottom:26px; left:50%; transform:translate(-50%,12px); background:#181A22; color:#fff;
+           padding:10px 20px; border-radius:12px; font-size:13px; opacity:0; transition:all .25s; pointer-events:none; z-index:99; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+  #toast.show { opacity:1; transform:translate(-50%,0); }
 </style>
 </head>
 <body>
-<header>
-  <h1>知识网络</h1><span class="tag">knowledge-engine · 本地优先 · 科学建链</span>
-  <div id="stats"></div>
-</header>
+
+<aside>
+  <div class="brand">
+    <div class="logo">知</div>
+    <div><b>知识网络</b><span>knowledge-engine</span></div>
+  </div>
+  <nav id="nav">
+    <a data-view="dashboard" class="active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      总览</a>
+    <a data-view="graph">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5l8-.5M7 8l4 8M17.5 9l-4 7"/></svg>
+      图谱</a>
+    <a data-view="ingest">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      采集</a>
+    <a data-view="review">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V6a2 2 0 0 1 2-2h13v13H6a2 2 0 0 0-2 2zm0 0a2 2 0 0 0 2 2h13"/><path d="M9 8h6"/></svg>
+      复习<span class="nav-badge" id="badge-due"></span></a>
+    <a data-view="verify">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>
+      验证</a>
+    <a data-view="ask">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
+      问答</a>
+  </nav>
+  <div class="side-foot">
+    <div class="mastery-ring" id="mastery-ring" style="position:relative"><b id="mastery-pct"></b></div>
+    <div class="m"><b id="mastery-label">—</b><span>总掌握度</span></div>
+  </div>
+</aside>
 
 <main>
-  <section class="card full">
-    <h2>知识图谱 <span id="graph-hint" style="font-weight:400;color:var(--muted);font-size:12px;">（点击节点聚焦，滚轮缩放；点击边看理由）</span></h2>
-    <div id="diag" class="diag" style="font-size:12px;"></div>
-    <div id="graph"></div>
-  </section>
+  <div class="topbar">
+    <h1 id="view-title">总览</h1>
+    <div class="chips" id="stats-chips"></div>
+  </div>
+  <div class="views">
 
-  <section class="card">
-    <h2>采集 <span style="font-weight:400;color:var(--muted);font-size:12px;">文本 / 链接 / 音频</span></h2>
-    <textarea id="ingest-text" placeholder="粘贴文本 / 笔记摘录…"></textarea>
-    <div class="row">
-      <input type="text" id="ingest-url" placeholder="粘贴链接，自动提取正文（公众号/博客/文档…）" style="flex:1;min-width:140px;">
-      <button onclick="doIngestUrl()">提取</button>
-    </div>
-    <div class="row">
-      <label class="up"><input type="file" id="ingest-audio" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.wma" onchange="doIngestAudio(this)">上传音频 · 自动转写</label>
-    </div>
-    <div class="row">
-      <input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;min-width:140px;">
-      <button onclick="doIngest()">文本入库</button>
-    </div>
-    <div class="row"><button class="gray" onclick="doLink()">执行建链（未链接节点）</button></div>
-  </section>
-
-  <section class="card">
-    <h2>间隔重复回取 <span id="due-count" style="font-weight:400;color:var(--muted);font-size:12px;"></span></h2>
-    <div id="recall-list"></div>
-  </section>
-
-  <section class="card">
-    <h2>建议箱（待确认边）</h2>
-    <div id="edge-list"></div>
-  </section>
-
-  <section class="card">
-    <h2>矛盾检测</h2>
-    <div id="conflict-list"></div>
-    <div class="row"><button class="gray" onclick="doSynthesize()">执行每周综合</button></div>
-  </section>
-
-  <section class="card full">
-    <h2>对话问答 <span style="font-weight:400;color:var(--muted);font-size:12px;">（GraphRAG：召回→图扩展→冲突感知→引用溯源）</span></h2>
-    <div class="row">
-      <input type="text" id="ask-q" placeholder="对知识库提问，例：FSRS 是怎么决定复习间隔的？" style="flex:1;min-width:240px;">
-      <button onclick="doAsk()">提问</button>
-    </div>
-    <div id="ask-result"></div>
-  </section>
-
-  <section class="card full">
-    <h2>主动验证 <span id="mastery-tag" style="font-weight:400;color:var(--muted);font-size:12px;"></span></h2>
-    <div class="row">
-      <select id="verify-node" style="flex:1;min-width:200px;padding:7px 8px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></select>
-      <div class="tabs" id="verify-tabs">
-        <button class="sm tab active" data-mode="blind">盲测</button>
-        <button class="sm tab" data-mode="feynman">Feynman</button>
-        <button class="sm tab" data-mode="questions">生成提问</button>
+    <!-- 总览 -->
+    <div class="view active" id="view-dashboard">
+      <div class="stats-row" id="stats-cards"></div>
+      <div class="dash-main">
+        <div class="card">
+          <h2>知识图谱 <span class="hint">点击节点聚焦 · 滚轮缩放 · 点击边看理由</span>
+            <span class="spacer"></span><button class="btn ghost sm" onclick="switchView('graph')">查看大图</button></h2>
+          <div id="graph-dashboard" style="margin-top:12px;"></div>
+        </div>
+        <div class="rail">
+          <div class="card">
+            <h2>今日复习 <span class="spacer"></span><button class="btn ghost sm" onclick="switchView('review')">开始</button></h2>
+            <div id="dash-recall"></div>
+          </div>
+          <div class="card">
+            <h2>建议箱 <span class="hint">待确认边</span><span class="spacer"></span><button class="btn ghost sm" onclick="doLink()">建链</button></h2>
+            <div id="dash-pending"></div>
+          </div>
+          <div class="card">
+            <h2>矛盾 <span class="spacer"></span><button class="btn ghost sm" onclick="doSynthesize()">每周综合</button></h2>
+            <div id="dash-conflict"></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div id="verify-blind" class="verify-pane">
-      <div class="empty" id="blind-target">先选择节点开始盲测。</div>
-      <textarea id="blind-input" placeholder="凭记忆复述该节点的内容（不看原文）…" style="display:none;"></textarea>
-      <div class="row" id="blind-actions" style="display:none;">
-        <button class="sm gray" onclick="blindReveal()">揭示原文</button>
-      </div>
-      <div id="blind-reveal" style="display:none;"></div>
-      <div class="row" id="blind-grade" style="display:none;">
-        <span style="font-size:12px;color:var(--muted);">自评记忆程度（同步调 FSRS）：</span>
-        <button class="sm" onclick="blindGrade('again')">again</button>
-        <button class="sm" onclick="blindGrade('hard')">hard</button>
-        <button class="sm" onclick="blindGrade('good')">good</button>
-        <button class="sm" onclick="blindGrade('easy')">easy</button>
+    <!-- 图谱 -->
+    <div class="view" id="view-graph">
+      <div id="diag-bar"></div>
+      <div class="card">
+        <div id="graph-full"></div>
+        <div class="legend" id="edge-legend"></div>
       </div>
     </div>
 
-    <div id="verify-feynman" class="verify-pane" style="display:none;">
-      <textarea id="feynman-input" placeholder="用自己的话复述节点内容，LLM 会找出 gap…"></textarea>
-      <div class="row"><button onclick="doFeynman()">提交复述评分</button></div>
-      <div id="feynman-result"></div>
+    <!-- 采集 -->
+    <div class="view" id="view-ingest">
+      <div class="ingest-grid">
+        <div class="card">
+          <h2>文本入库 <span class="hint">粘贴笔记 / 摘录 / 灵感</span></h2>
+          <textarea id="ingest-text" placeholder="粘贴文本内容…" style="height:180px;margin-top:12px;"></textarea>
+          <div class="row" style="margin-top:12px;">
+            <input type="text" id="ingest-title" placeholder="标题（可选）" style="flex:1;">
+            <button class="btn" onclick="doIngest()">入库 ⌘⏎</button>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h2>链接提取 <span class="hint">自动抓取正文</span></h2>
+            <div class="row" style="margin-top:12px;">
+              <input type="text" id="ingest-url" placeholder="https://…（公众号 / 博客 / 文档）" style="flex:1;">
+              <button class="btn" onclick="doIngestUrl()">提取</button>
+            </div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h2>音频转写 <span class="hint">本地 ASR</span></h2>
+            <div id="drop">点击选择音频文件，或拖拽到这里<br><span style="font-size:11.5px;opacity:.7;">wav / mp3 / m4a / ogg / flac</span>
+              <input type="file" id="ingest-audio" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac,.aac,.wma"></div>
+          </div>
+          <div class="card" style="margin-top:16px;">
+            <h2>科学建链 <span class="hint">为未链接节点自动建边</span></h2>
+            <div class="actions-card">
+              <div class="row" style="margin-top:12px;">
+                <button class="btn" style="flex:1;" onclick="doLink()">执行建链</button>
+                <button class="btn ghost" style="flex:1;" onclick="doSynthesize()">每周综合</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div id="verify-questions" class="verify-pane" style="display:none;">
-      <div class="row"><button onclick="doQuestions()">生成 3 个检验提问</button></div>
-      <div id="questions-result"></div>
+    <!-- 复习 -->
+    <div class="view" id="view-review">
+      <div class="flash-wrap">
+        <div class="progress"><span class="muted" id="flash-progress-text"></span><div class="bar"><span id="flash-progress-bar"></span></div></div>
+        <div id="flash-box"></div>
+      </div>
     </div>
-  </section>
+
+    <!-- 验证 -->
+    <div class="view" id="view-verify">
+      <div style="max-width:820px;margin:0 auto;">
+        <div class="card">
+          <div class="row">
+            <select id="verify-node" style="flex:1;"></select>
+            <div class="mode-tabs" id="verify-tabs">
+              <button class="tab active" data-mode="blind">盲测</button>
+              <button class="tab" data-mode="feynman">Feynman</button>
+              <button class="tab" data-mode="questions">生成提问</button>
+            </div>
+          </div>
+
+          <div id="verify-blind" style="margin-top:16px;">
+            <div id="blind-target"></div>
+            <textarea id="blind-input" placeholder="凭记忆复述该节点的内容（不看原文）…" style="display:none;height:110px;"></textarea>
+            <div class="row" id="blind-actions" style="display:none;margin-top:12px;">
+              <button class="btn ghost" onclick="blindReveal()">揭示原文 <kbd>Space</kbd></button>
+            </div>
+            <div id="blind-reveal" class="item" style="display:none;"></div>
+            <div class="grade-row" id="blind-grade" style="display:none;">
+              <button class="btn grade-again" onclick="blindGrade('again')">忘了 <kbd>1</kbd></button>
+              <button class="btn grade-hard" onclick="blindGrade('hard')">困难 <kbd>2</kbd></button>
+              <button class="btn grade-good" onclick="blindGrade('good')">记得 <kbd>3</kbd></button>
+              <button class="btn grade-easy" onclick="blindGrade('easy')">轻松 <kbd>4</kbd></button>
+            </div>
+          </div>
+
+          <div id="verify-feynman" style="display:none;margin-top:16px;">
+            <textarea id="feynman-input" placeholder="用自己的话复述节点内容，LLM 会找出 gap 并评分…" style="height:130px;"></textarea>
+            <div class="row" style="margin-top:12px;"><button class="btn" onclick="doFeynman()">提交复述评分</button></div>
+            <div id="feynman-result"></div>
+          </div>
+
+          <div id="verify-questions" style="display:none;margin-top:16px;">
+            <div class="row"><button class="btn" onclick="doQuestions()">生成 3 个检验提问</button></div>
+            <div id="questions-result" style="margin-top:12px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 问答 -->
+    <div class="view" id="view-ask">
+      <div class="chat-wrap">
+        <div id="chat-log">
+          <div class="empty" id="chat-empty">对知识库提问，例：FSRS 是怎么决定复习间隔的？<br><span style="font-size:12px;">回答基于图谱召回，强制引用来源节点</span></div>
+        </div>
+        <div class="chat-input">
+          <input type="text" id="ask-q" placeholder="输入问题，Enter 发送…" onkeydown="if(event.key==='Enter')doAsk()">
+          <button class="btn" onclick="doAsk()">提问</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
 </main>
-<div id="edge-detail"></div>
+
+<div id="drawer-mask" onclick="closeDrawer()"></div>
+<div id="drawer"></div>
 <div id="toast"></div>
 
 <script>
 const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
 const api = async (url, opts) => { const r = await fetch(url, opts); if(!r.ok) throw new Error(await r.text()); return r.json(); };
+const esc = s => (s??'').toString().replace(/</g,'&lt;');
 let toastTimer;
-function toast(msg){ const t=$('#toast'); t.textContent=msg; t.style.opacity=1; clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.opacity=0,2000); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200); }
 
+/* ---------- 视图切换 ---------- */
+const VIEW_TITLE = { dashboard:'总览', graph:'知识图谱', ingest:'采集', review:'间隔重复复习', verify:'主动验证', ask:'对话问答' };
+let _view = 'dashboard';
+function switchView(v){
+  _view = v;
+  $$('#nav a').forEach(a=>a.classList.toggle('active', a.dataset.view===v));
+  $$('.view').forEach(el=>el.classList.toggle('active', el.id==='view-'+v));
+  $('#view-title').textContent = VIEW_TITLE[v];
+  if(v==='dashboard') setTimeout(()=>renderGraphInto('graph-dashboard'),60);
+  if(v==='graph') setTimeout(()=>renderGraphInto('graph-full'),60);
+  if(v==='review') renderFlash();
+}
+$('#nav').addEventListener('click', e=>{ const a=e.target.closest('a'); if(a) switchView(a.dataset.view); });
+
+/* ---------- 键盘快捷键 ---------- */
+document.addEventListener('keydown', e=>{
+  const tag = (e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select'){ return; }
+  if(_view==='review' && _flashIdx>=0){
+    if(e.key===' ' && !_revealed){ revealFlash(); e.preventDefault(); return; }
+    const m = {'1':'again','2':'hard','3':'good','4':'easy'};
+    if(m[e.key] && $('#flash-box .grade-row')) { doReview(_cards[_flashIdx].id, m[e.key]); e.preventDefault(); }
+  }
+  if(_view==='verify' && $('#verify-blind').style.display!=='none'){
+    if(e.key===' ' && $('#blind-grade').style.display==='none'){ blindReveal(); e.preventDefault(); }
+    const m = {'1':'again','2':'hard','3':'good','4':'easy'};
+    if(m[e.key] && $('#blind-grade').style.display!=='none'){ blindGrade(m[e.key]); e.preventDefault(); }
+  }
+});
+
+/* ---------- 统计 ---------- */
 async function loadStats(){
   const s = await api('/api/stats');
-  $('#stats').innerHTML = `
-    <div class="stat"><b>${s.active}</b><span>节点</span></div>
-    <div class="stat"><b>${s.edges}</b><span>边</span></div>
-    <div class="stat"><b>${s.link_density}</b><span>密度</span></div>
-    <div class="stat"><b>${(s.orphan_rate*100).toFixed(0)}%</b><span>孤儿率</span></div>
-    <div class="stat"><b>${s.due_today}</b><span>今日到期</span></div>
-    <div class="stat"><b>${s.pending_edges}</b><span>待确认</span></div>`;
+  $('#stats-cards').innerHTML = [
+    [s.active,'知识节点',false],[s.edges,'命题边',false],[s.due_today,'今日到期',true],
+    [s.pending_edges,'待确认边',true],[(s.orphan_rate*100).toFixed(0)+'%','孤儿率',s.orphan_rate>0.3],[s.link_density,'连接密度',false],
+  ].map(([v,l,hot])=>`<div class="stat-card${hot?' hot':''}"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#stats-chips').innerHTML = `
+    <div class="chip hot"><b>${s.due_today}</b> 今日到期</div>
+    <div class="chip"><b>${s.pending_edges}</b> 待确认</div>
+    <div class="chip"><b>${s.active}</b> 节点 · <b>${s.edges}</b> 边</div>`;
+  $('#badge-due').textContent = s.due_today>0 ? s.due_today : '';
 }
 
-let chart;
-const TYPE_COLOR = { concept:'#8BC8EA', claim:'#94D8C3', question:'#F4B393' };
-/* 9 类命题边分色：矛盾红 / 支持 / 前提绿虚线 / 其他灰 */
-const EDGE_COLOR = {
-  contradicts:'#EA6668', supports:'#52C41A', prerequisite_of:'#2E7D32',
-  implies:'#5B8DEF', exemplifies:'#9C6ADE', refines:'#F4B139',
-  contrasts:'#795548', merges:'#00838F', relates:'#9E9E9E'
-};
+/* ---------- 图谱 ---------- */
+const TYPE_COLOR = { concept:'#A5B8F3', claim:'#9ADCC3', question:'#F5C29E' };
+const EDGE_COLOR = { contradicts:'#DC2626', supports:'#16A34A', prerequisite_of:'#15803D',
+  implies:'#5B8DEF', exemplifies:'#9C6ADE', refines:'#E09A2D', contrasts:'#8D6E63', merges:'#00838F', relates:'#B0B7C3' };
+const EDGE_ZH = { contradicts:'矛盾', supports:'支持', prerequisite_of:'前置', implies:'蕴含',
+  exemplifies:'例证', refines:'细化', contrasts:'对比', merges:'合并', relates:'关联' };
+$('#edge-legend').innerHTML = Object.keys(EDGE_COLOR).map(k=>`<span><i style="background:${EDGE_COLOR[k]}"></i>${EDGE_ZH[k]}</span>`).join('');
+const TYPE_ZH = { concept:'概念', claim:'观点', question:'问题' };
+
+let _graphData = null, _diag = null, _charts = {};
 async function loadGraph(){
-  if(!window.vis){ setTimeout(loadGraph, 200); return; }  // 等 CDN
-  const {nodes, edges} = await api('/api/graph?root=1&depth=3');
-  const diag = await api('/api/diagnostics').catch(()=>({orphans:[],pending_edges:[],contradictions:[]}));
-  let html = '';
-  if(diag.orphans.length) html += `<span class="tag orphan" onclick="focusOrphan()">孤儿 ${diag.orphans.length} ·</span> `;
-  if(diag.pending_edges.length) html += `<span class="tag" style="color:#B26A00">待确认 ${diag.pending_edges.length} ·</span> `;
-  if(diag.contradictions.length) html += `<span class="tag contra" onclick="focusContradictions()">矛盾 ${diag.contradictions.length}</span>`;
-  $('#diag').innerHTML = html || '<span style="color:var(--muted)">图谱健康，无孤儿/矛盾</span>';
-  window._diag = diag;
-  if(!nodes.length){ $('#graph-hint').textContent='（暂无节点，先采集内容）'; if(chart) chart.destroy(); chart=null; return; }
-  const orphanIds = new Set(diag.orphans.map(n=>n.id));
-  const contraEdgeIds = new Set(diag.contradictions.map(e=>e.id));
-  const visNodes = nodes.map(n=>({
-    id:n.id, label:(n.title||'').slice(0,16),
-    color:{background:TYPE_COLOR[n.type]||'#ccc', border: orphanIds.has(n.id)?'#FAAD14':undefined,
-           highlight:{border:'#000'}},
-    shape: n.type==='question'?'diamond':'dot', size: n.type==='question'?28:18,
+  try{
+    _graphData = await api('/api/graph?root=1&depth=3');
+    _diag = await api('/api/diagnostics').catch(()=>({orphans:[],pending_edges:[],contradictions:[]}));
+  }catch(e){ _graphData={nodes:[],edges:[]}; _diag={orphans:[],pending_edges:[],contradictions:[]}; }
+  _charts = {};
+  $('#diag-bar').innerHTML = buildDiagBar();
+  const has = _graphData.nodes.length>0;
+  if($('#view-dashboard').classList.contains('active')) renderGraphInto('graph-dashboard');
+  if($('#view-graph').classList.contains('active')) renderGraphInto('graph-full');
+}
+function buildDiagBar(){
+  const d = _diag; let h = '';
+  if(d.orphans.length) h += `<span class="diag-chip warn" onclick="focusOrphan()">⚠ 孤儿节点 ${d.orphans.length}</span>`;
+  if(d.pending_edges.length) h += `<span class="diag-chip" onclick="switchView('dashboard')">待确认边 ${d.pending_edges.length}</span>`;
+  if(d.contradictions.length) h += `<span class="diag-chip err" onclick="focusContradictions()">✕ 矛盾 ${d.contradictions.length}</span>`;
+  return h || '<span class="muted">图谱健康 · 无孤儿 / 矛盾</span>';
+}
+function renderGraphInto(containerId){
+  if(!window.vis){ setTimeout(()=>renderGraphInto(containerId), 200); return; }
+  const el = document.getElementById(containerId); if(!el) return;
+  const orphanIds = new Set((_diag?.orphans||[]).map(n=>n.id));
+  const contraEdgeIds = new Set((_diag?.contradictions||[]).map(e=>e.id));
+  if(!_graphData.nodes.length){
+    el.innerHTML = '<div class="empty" style="padding-top:180px;">暂无节点 · 去「采集」添加第一条知识</div>'; return;
+  }
+  const visNodes = _graphData.nodes.map(n=>({
+    id:n.id, label:(n.title||'').slice(0,18),
+    color:{ background:TYPE_COLOR[n.type]||'#D1D5DB', border: orphanIds.has(n.id)?'#D97706':'#FFFFFF', borderWidth:2,
+            highlight:{border:'#6366F1'} },
+    shape: n.type==='question'?'diamond':'dot', size: n.type==='question'?26:17,
+    font:{ size:12, color:'#3B4252', face:'inherit' },
   }));
-  const visEdges = edges.map(e=>{
-    const c = EDGE_COLOR[e.rel_type] || '#9E9E9E';
-    const w = Math.max(1, Math.round((e.confidence||0.5)*5));
+  const visEdges = _graphData.edges.map(e=>{
+    const c = EDGE_COLOR[e.rel_type] || '#B0B7C3';
+    const w = Math.max(1, Math.round((e.confidence||0.5)*4));
     const pending = e.confirm_status==='pending';
     const contra = contraEdgeIds.has(e.id);
-    return { id:e.id, from:e.src_id, to:e.dst_id, label:e.rel_type, font:{size:9,color:c},
-      color:{color:c, highlight:c}, width:w, dashes: pending ? [4,4] : false,
-      arrows:{to:{enabled: e.rel_type!=='relates' && e.rel_type!=='merges'}},
-      title:`${e.rel_type} · conf=${e.confidence} · ${e.confirm_status}` + (contra?' [矛盾]':'')
-    };
+    return { id:e.id, from:e.src_id, to:e.dst_id, label:EDGE_ZH[e.rel_type]||e.rel_type,
+      font:{ size:10, color:c, strokeWidth:3, strokeText:'#fff' },
+      color:{ color:c, highlight:c }, width:w, dashes: pending||contra ? [5,5] : false,
+      arrows:{ to:{ enabled: e.rel_type!=='relates' && e.rel_type!=='merges', scaleFactor:.6 } },
+      title:`${EDGE_ZH[e.rel_type]||e.rel_type} · 置信 ${e.confidence} · ${e.confirm_status}` + (contra?' [矛盾]':'') };
   });
-  const data = {nodes:new vis.DataSet(visNodes), edges:new vis.DataSet(visEdges)};
-  if(chart) chart.destroy();
-  chart = new vis.Network($('#graph'), data, {
-    physics:{stabilization:true, barnesHut:{gravitationalConstant:-3000}},
-    nodes:{font:{size:11,color:'#333'}}, edges:{smooth:{type:'dynamic'}},
-    interaction:{hover:true, tooltipDelay:120}
+  const data = { nodes:new vis.DataSet(visNodes), edges:new vis.DataSet(visEdges) };
+  if(_charts[containerId]) _charts[containerId].destroy();
+  _charts[containerId] = new vis.Network(el, data, {
+    physics:{ stabilization:true, barnesHut:{ gravitationalConstant:-3200, springLength:120 } },
+    edges:{ smooth:{ type:'dynamic' } },
+    interaction:{ hover:true, tooltipDelay:120, navigationButtons:false },
   });
-  chart.on('click', p=>{
+  _charts[containerId].on('click', p=>{
     if(p.edges.length){ showEdgeDetail(p.edges[0]); }
-    else if(p.nodes.length){ window._net=p.nodes[0]; }
   });
 }
+function focusOrphan(){ const ids=(_diag?.orphans||[]).map(n=>n.id); if(ids.length&&_charts['graph-full']) _charts['graph-full'].selectNodes([ids[0]]); }
+function focusContradictions(){ const eids=(_diag?.contradictions||[]).map(e=>e.id); if(eids.length){ switchView('graph'); showEdgeDetail(eids[0]); } }
 
+/* ---------- 边详情抽屉 ---------- */
 async function showEdgeDetail(eid){
-  const e = await api(`/api/edges`).then(r=>r.edges.find(x=>x.id===eid));
-  if(!e){ $('#edge-detail').classList.remove('show'); return; }
-  $('#edge-detail').innerHTML = `
-    <h3>${e.rel_type}</h3>
-    <div class="meta">置信度 ${(e.confidence||0).toFixed(2)} · 状态 ${e.confirm_status}</div>
-    <div class="meta">来源 #${e.src_id} → 目标 #${e.dst_id}</div>
-    <div class="rationale">${e.rationale||'（无理由）'}</div>
-    ${e.confirm_status==='pending' ? `<button class="sm" onclick="doConfirm(${e.id},'approve')">通过</button>
-      <button class="sm gray" onclick="doConfirm(${e.id},'reject')">驳回</button>` : ''}
-    <button class="sm gray" onclick="document.getElementById('edge-detail').classList.remove('show')">关闭</button>
-  `;
-  $('#edge-detail').classList.add('show');
+  const {edges} = await api('/api/edges');
+  const e = edges.find(x=>x.id===eid); if(!e){ return; }
+  const src = _graphData?.nodes.find(n=>n.id===e.src_id), dst = _graphData?.nodes.find(n=>n.id===e.dst_id);
+  $('#drawer').innerHTML = `
+    <h3>${EDGE_ZH[e.rel_type]||e.rel_type}</h3>
+    <span class="pill ${e.confirm_status==='pending'?'pending':'auto'}">${e.confirm_status==='pending'?'待确认':'已确认'} · 置信 ${(e.confidence||0).toFixed(2)}</span>
+    <div class="meta">来源：#${e.src_id} ${esc(src?.title||'')}</div>
+    <div class="meta">目标：#${e.dst_id} ${esc(dst?.title||'')}</div>
+    <div class="rationale">${esc(e.rationale)||'（无理由）'}</div>
+    <div class="row">
+      ${e.confirm_status==='pending'?`<button class="btn sm" onclick="doConfirm(${e.id},'approve')">通过</button>
+        <button class="btn ghost sm" onclick="doConfirm(${e.id},'reject')">驳回</button>`:''}
+      <button class="btn ghost sm" onclick="closeDrawer()">关闭</button>
+    </div>`;
+  $('#drawer').classList.add('show'); $('#drawer-mask').classList.add('show');
 }
+function closeDrawer(){ $('#drawer').classList.remove('show'); $('#drawer-mask').classList.remove('show'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
 
-function focusOrphan(){
-  const ids = (window._diag?.orphans||[]).map(n=>n.id);
-  if(ids.length && chart){ chart.selectNodes([ids[0]]); }
-}
-function focusContradictions(){
-  const eids = (window._diag?.contradictions||[]).map(e=>e.id);
-  if(eids.length){ showEdgeDetail(eids[0]); }
-}
-
+/* ---------- 采集 ---------- */
 async function doIngest(){
   const text = $('#ingest-text').value.trim(); if(!text){ toast('请输入内容'); return; }
   try{ const r = await api('/api/ingest',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({text, title:$('#ingest-title').value.trim(), kind:'clipboard'})});
     toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
     $('#ingest-text').value=''; $('#ingest-title').value='';
-    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+    await refreshAll();
   }catch(e){ toast('失败: '+e.message); }
 }
-
 async function doIngestUrl(){
   const url = $('#ingest-url').value.trim(); if(!url){ toast('请输入链接'); return; }
   try{ const r = await api('/api/ingest/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
     toast(r.deduped?`去重命中，来源 #${r.source_id}`:`提取入库 ${r.added} 节点（来源 #${r.source_id}）`);
-    $('#ingest-url').value='';
-    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+    $('#ingest-url').value=''; await refreshAll();
   }catch(e){ toast('失败: '+e.message); }
 }
-
 async function uploadIngest(file, endpoint, doingMsg){
   const fd = new FormData(); fd.append('file', file);
   toast(doingMsg);
   try{ const r = await api(endpoint,{method:'POST',body:fd});
     toast(r.deduped?`去重命中，来源 #${r.source_id}`:`入库 ${r.added} 节点（来源 #${r.source_id}）`);
-    await Promise.all([loadStats(),loadGraph(),loadRecall()]);
+    await refreshAll();
   }catch(e){ toast('失败: '+e.message); }
 }
-
-async function doIngestAudio(input){
-  const f = input.files && input.files[0]; if(!f) return;
-  await uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…');
-  input.value='';
-}
-
+$('#ingest-audio').addEventListener('change', function(){
+  const f = this.files && this.files[0]; if(!f) return;
+  uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…'); this.value='';
+});
+const drop = $('#drop');
+drop.addEventListener('click', ()=>$('#ingest-audio').click());
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
+  uploadIngest(f, '/api/ingest/audio', '音频转写中，首次使用需下载模型，请稍候…');
+});
+document.addEventListener('keydown', e=>{
+  if((e.metaKey||e.ctrlKey) && e.key==='Enter' && _view==='ingest') doIngest();
+});
 async function doLink(){
   try{ const r = await api('/api/link',{method:'POST'}); toast(`建链完成：自动 ${r.linked}，待确认 ${r.pending}，环拦截 ${r.cycles}`); }
   catch(e){ toast('失败: '+e.message); }
-  await Promise.all([loadStats(),loadGraph(),loadEdges()]);
+  await refreshAll();
 }
 
+/* ---------- 复习（闪卡） ---------- */
+let _cards = [], _flashIdx = -1, _revealed = false;
 async function loadRecall(){
   const {cards} = await api('/api/recall');
-  $('#due-count').textContent = cards.length?`（${cards.length} 张待复习）`:'';
-  const box = $('#recall-list');
-  if(!cards.length){ box.innerHTML='<div class="empty">今日无到期卡片。</div>'; return; }
-  box.innerHTML = cards.map(c=>{
-    const tag = (!c.recall_state || c.recall_state==='{}') ? '新卡' : '复习中';
-    return `<div class="item"><span class="t">[${c.id}] ${c.title}</span><span class="pill pending">${tag}</span>
-      <div class="b">${c.body.slice(0,80)}…</div>
-      <div class="row">${['again','hard','good','easy'].map(r=>`<button class="sm" onclick="doReview(${c.id},'${r}')">${r}</button>`).join('')}</div></div>`;
-  }).join('');
+  _cards = cards; _flashIdx = cards.length ? 0 : -1; _revealed = false;
+  const box = $('#dash-recall');
+  if(!cards.length){ box.innerHTML = '<div class="empty">今日无到期卡片 ✓</div>'; }
+  else box.innerHTML = cards.slice(0,4).map(c=>`<div class="item" style="padding:10px 12px;">
+      <span class="t">${esc(c.title).slice(0,26)}</span>
+      <div class="b">#${c.id} · ${esc(c.body).slice(0,40)}…</div></div>`).join('');
+  renderFlash();
 }
-
+function renderFlash(){
+  const box = $('#flash-box');
+  $('#flash-progress-text').textContent = _cards.length ? `${Math.min(_flashIdx+1,_cards.length)} / ${_cards.length}` : '';
+  $('#flash-progress-bar').style.width = _cards.length ? `${(_flashIdx+1)/_cards.length*100}%` : '0';
+  if(_flashIdx<0){ box.innerHTML = `<div class="flash" style="align-items:center;text-align:center;">
+      <h3 style="font-size:17px;color:var(--muted);">今日复习完成 🎉</h3><div class="reveal-hint">没有到期卡片了，去采集些新知识吧</div></div>`; return; }
+  const c = _cards[_flashIdx];
+  const isNew = !c.recall_state || c.recall_state==='{}';
+  box.innerHTML = `<div class="flash">
+      <div class="type-row">${c.type?`<span class="pill ${c.type}">${TYPE_ZH[c.type]||c.type}</span>`:''}<span class="pill pending">${isNew?'新卡':'复习中'}</span><span class="muted">#${c.id}</span></div>
+      <h3>${esc(c.title)}</h3>
+      ${_revealed ? `<div class="body">${esc(c.body)}</div>` : `<div class="reveal-hint">先回忆内容，再点击揭示 · 空格键</div>`}
+      ${_revealed
+        ? `<div class="grade-row">
+            <button class="btn grade-again" onclick="doReview(${c.id},'again')">忘了 <kbd>1</kbd></button>
+            <button class="btn grade-hard" onclick="doReview(${c.id},'hard')">困难 <kbd>2</kbd></button>
+            <button class="btn grade-good" onclick="doReview(${c.id},'good')">记得 <kbd>3</kbd></button>
+            <button class="btn grade-easy" onclick="doReview(${c.id},'easy')">轻松 <kbd>4</kbd></button>
+          </div>`
+        : `<div class="row" style="margin-top:8px;"><button class="btn" onclick="revealFlash()">揭示原文 <kbd>Space</kbd></button></div>`}
+    </div>`;
+}
+function revealFlash(){ _revealed = true; renderFlash(); }
 async function doReview(nid, rating){
   try{ await api(`/api/recall/${nid}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
-    toast(`节点 ${nid} 已按 ${rating} 评分`); await Promise.all([loadRecall(),loadStats()]); }
+    toast(`已评分：${rating}`); _flashIdx++; _revealed=false; renderFlash(); loadStats(); loadMastery(); }
   catch(e){ toast('失败: '+e.message); }
 }
 
+/* ---------- 建议箱 / 矛盾 ---------- */
 async function loadEdges(){
   const {edges} = await api('/api/edges?status=pending');
-  const box = $('#edge-list');
-  if(!edges.length){ box.innerHTML='<div class="empty">建议箱为空。</div>'; return; }
-  box.innerHTML = edges.map(e=>`<div class="item">
-    <span class="t">#${e.src_id} <b>${e.rel_type}</b> #${e.dst_id}</span><span class="pill pending">conf ${e.confidence}</span>
-    <div class="b">${e.rationale||'无理由'}</div>
-    <div class="row"><button class="sm" onclick="doConfirm(${e.id},'approve')">接受</button>
-    <button class="sm gray" onclick="doConfirm(${e.id},'reject')">拒绝</button>
-    <button class="sm gray" onclick="doConfirm(${e.id},'delete')">删除</button></div></div>`).join('');
+  const box = $('#dash-pending');
+  if(!edges.length){ box.innerHTML='<div class="empty">建议箱为空 ✓</div>'; return; }
+  box.innerHTML = edges.slice(0,3).map(e=>`<div class="item" style="padding:10px 12px;">
+    <span class="t">#${e.src_id} <b style="color:var(--accent-text)">${EDGE_ZH[e.rel_type]||e.rel_type}</b> #${e.dst_id}</span>
+    <span class="pill pending">conf ${e.confidence}</span>
+    <div class="b">${esc(e.rationale).slice(0,60)}</div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn sm" onclick="doConfirm(${e.id},'approve')">接受</button>
+      <button class="btn ghost sm" onclick="doConfirm(${e.id},'reject')">拒绝</button>
+      <button class="btn ghost sm danger" onclick="doConfirm(${e.id},'delete')">删除</button>
+    </div></div>`).join('');
 }
-
 async function doConfirm(eid, action){
   try{ await api(`/api/edges/${eid}/confirm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
-    toast('已更新'); await Promise.all([loadEdges(),loadStats(),loadGraph()]); }
+    toast('已更新'); closeDrawer(); await refreshAll(); }
   catch(e){ toast('失败: '+e.message); }
 }
-
 async function loadConflicts(){
   const {conflicts} = await api('/api/conflicts');
-  const box = $('#conflict-list');
-  if(!conflicts.length){ box.innerHTML='<div class="empty">当前无矛盾。</div>'; return; }
-  box.innerHTML = conflicts.map(c=>`<div class="item">
-    <span class="t">A: ${c.a.title}</span><br><span class="t">B: ${c.b.title}</span>
-    <div class="b">${c.rationale}</div>
-    <div class="row"><button class="sm" onclick="doResolve(${c.edge_id},'keep')">保留并存</button>
-    <button class="sm gray" onclick="doResolve(${c.edge_id},'archive_a')">归档 A</button>
-    <button class="sm gray" onclick="doResolve(${c.edge_id},'archive_b')">归档 B</button></div></div>`).join('');
+  const box = $('#dash-conflict');
+  if(!conflicts.length){ box.innerHTML='<div class="empty">当前无矛盾 ✓</div>'; return; }
+  box.innerHTML = conflicts.slice(0,2).map(c=>`<div class="item" style="padding:10px 12px;">
+    <div class="t" style="font-size:12.5px;">A：${esc(c.a.title).slice(0,30)}</div>
+    <div class="t" style="font-size:12.5px;">B：${esc(c.b.title).slice(0,30)}</div>
+    <div class="b">${esc(c.rationale).slice(0,60)}</div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn sm" onclick="doResolve(${c.edge_id},'keep')">并存</button>
+      <button class="btn ghost sm" onclick="doResolve(${c.edge_id},'archive_a')">归档 A</button>
+      <button class="btn ghost sm" onclick="doResolve(${c.edge_id},'archive_b')">归档 B</button>
+    </div></div>`).join('');
 }
-
 async function doResolve(eid, action){
   try{ await api(`/api/conflicts/${eid}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
-    toast('已处理'); await Promise.all([loadConflicts(),loadStats(),loadGraph()]); }
+    toast('已处理'); await refreshAll(); }
   catch(e){ toast('失败: '+e.message); }
 }
-
 async function doSynthesize(){
   try{ const r = await api('/api/synthesize',{method:'POST'});
-    const items = r.items||[]; toast(items.length?`综合产出 ${items.length} 篇`:'暂无可综合的社区'); 
-    await Promise.all([loadStats(),loadGraph()]); }
+    const items = r.items||[]; toast(items.length?`综合产出 ${items.length} 篇`:'暂无可综合的社区');
+    await refreshAll(); }
   catch(e){ toast('失败: '+e.message); }
 }
 
+/* ---------- 问答（聊天式） ---------- */
 async function doAsk(){
-  const q = $('#ask-q').value.trim(); if(!q){ toast('请输入问题'); return; }
-  const box = $('#ask-result'); box.innerHTML='<div class="empty">正在召回并生成答案…</div>';
-  try{ const r = await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
-    const cited = (r.cited_nodes||[]).map(n=>`<span class="pill concept" style="cursor:pointer" onclick="location.hash='';loadGraph();" title="${(n.body||'').slice(0,60)}">[#${n.id}] ${(n.title||'').slice(0,18)}</span>`).join(' ');
+  const q = $('#ask-q').value.trim(); if(!q){ return; }
+  $('#ask-q').value = '';
+  const log = $('#chat-log'); $('#chat-empty')?.remove();
+  log.insertAdjacentHTML('beforeend', `<div class="bubble user">${esc(q)}</div>
+    <div class="bubble bot" id="chat-loading">召回图谱并生成答案…</div>`);
+  log.scrollTop = log.scrollHeight;
+  try{
+    const r = await api('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+    $('#chat-loading')?.remove();
+    const cited = (r.cited_nodes||[]).map(n=>`<span class="pill concept" title="${esc(n.body).slice(0,80)}">[#${n.id}] ${esc(n.title).slice(0,16)}</span>`).join('');
     const contra = (r.contradictions||[]).length
-      ? `<div class="contra">存在矛盾：${r.contradictions.map(c=>`#${c.src_id} ↔ #${c.dst_id}（置信 ${c.confidence}）`).join('；')}</div>` : '';
-    box.innerHTML = `<div class="ans">${(r.answer||'').replace(/</g,'&lt;')}</div>
-      <div class="cite"><b>引用节点：</b>${cited||'无'}</div>${contra}`;
-  }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
+      ? `<div class="contra">⚠ 涉及矛盾：${r.contradictions.map(c=>`#${c.src_id} ↔ #${c.dst_id}（置信 ${c.confidence}）`).join('；')}</div>` : '';
+    log.insertAdjacentHTML('beforeend', `<div class="bubble bot">${esc(r.answer||'（无答案）')}
+      <div class="cite">${cited?'<b style="font-size:11px;color:var(--muted);align-self:center;">引用：</b>'+cited:'<span class="muted">无引用</span>'}</div>${contra}</div>`);
+    log.scrollTop = log.scrollHeight;
+  }catch(e){ $('#chat-loading')?.remove(); toast('失败: '+e.message); }
 }
 
-/* 主动验证：节点选择器 + 模式切换 + 盲测/Feynman/生成提问 */
+/* ---------- 主动验证 ---------- */
 let _verifyMode = 'blind';
-let _verifyCards = [];
 async function loadVerifyNodes(){
-  // 复用回取队列（到期+新卡），作为验证候选
   const {cards} = await api('/api/recall?limit=50').catch(()=>({cards:[]}));
-  _verifyCards = cards;
   const sel = $('#verify-node');
-  if(!cards.length){ sel.innerHTML='<option value="">（暂无到期节点）</option>'; return; }
-  sel.innerHTML = cards.map(c=>`<option value="${c.id}">[${c.id}] ${(c.title||'').slice(0,28)}</option>`).join('');
+  if(!cards.length){ sel.innerHTML='<option value="">（暂无到期节点）</option>'; switchVerifyNode(''); return; }
+  sel.innerHTML = cards.map(c=>`<option value="${c.id}">#${c.id} ${esc(c.title).slice(0,28)}</option>`).join('');
   sel.onchange = () => switchVerifyNode(sel.value);
   switchVerifyNode(sel.value);
 }
 function switchVerifyNode(nid){
   if(!nid){
-    $('#blind-target').textContent='先选择节点开始盲测。';
-    ['#blind-input','#blind-actions','#blind-reveal','#blind-grade'].forEach(s=>$(s).style.display='none');
+    $('#blind-target').innerHTML='<div class="empty">先选择节点开始盲测。</div>';
+    ['#blind-input','#blind-actions','#blind-reveal','#blind-grade'].forEach(s=>{const el=$(s); el.style.display='none';});
     return;
   }
-  // 盲测：只显示标题，不显示 body
-  const c = _verifyCards.find(x=>x.id==nid) || {};
-  const title = (c.title||'').slice(0,40);
-  $('#blind-target').innerHTML = `<div class="item"><span class="t">${title}</span><div class="b">（原文已隐藏，凭记忆复述）</div></div>`;
+  api('/api/recall?limit=50').then(({cards})=>{
+    const c = cards.find(x=>x.id==nid) || {};
+    $('#blind-target').innerHTML = `<div class="item" style="margin-bottom:12px;">
+      <span class="t">${esc(c.title).slice(0,44)}</span>
+      <div class="b">原文已隐藏 · 凭记忆在下方复述</div></div>`;
+  });
   $('#blind-input').style.display='block'; $('#blind-input').value='';
   $('#blind-actions').style.display='flex';
   $('#blind-reveal').style.display='none'; $('#blind-reveal').innerHTML='';
@@ -416,16 +683,17 @@ function switchVerifyNode(nid){
 }
 async function blindReveal(){
   const nid = $('#verify-node').value; if(!nid) return;
-  const c = _verifyCards.find(x=>x.id==nid);
-  if(!c){ toast('节点信息丢失，请刷新'); return; }
-  $('#blind-reveal').innerHTML = `<b>原文：</b>${(c.title||'').replace(/</g,'&lt;')}<br><span style="color:var(--muted)">${(c.body||'').replace(/</g,'&lt;')}</span>`;
+  const {cards} = await api('/api/recall?limit=50');
+  const c = cards.find(x=>x.id==nid); if(!c){ toast('节点信息丢失，请刷新'); return; }
+  $('#blind-reveal').innerHTML = `<div class="t">${esc(c.title)}</div><div class="b" style="margin-top:6px;">${esc(c.body)}</div>`;
   $('#blind-reveal').style.display='block';
-  $('#blind-grade').style.display='flex';
+  $('#blind-grade').style.display='grid';
+  $('#blind-actions').style.display='none';
 }
 async function blindGrade(rating){
   const nid = $('#verify-node').value; if(!nid) return;
   try{ await api(`/api/recall/${nid}/review`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rating})});
-    toast(`盲测自评 ${rating} 已同步 FSRS`); await Promise.all([loadRecall(),loadStats(),loadMastery()]); }
+    toast(`盲测自评 ${rating} 已同步 FSRS`); await Promise.all([loadRecall(),loadStats(),loadMastery(),loadVerifyNodes()]); }
   catch(e){ toast('失败: '+e.message); }
 }
 async function doFeynman(){
@@ -433,10 +701,10 @@ async function doFeynman(){
   const p = $('#feynman-input').value.trim(); if(!p){ toast('请输入复述'); return; }
   const box = $('#feynman-result'); box.innerHTML='<div class="empty">评分中…</div>';
   try{ const r = await api('/api/verify/feynman',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nid:+nid,paraphrase:p})});
-    const gaps = (r.gaps||[]).map(g=>`<span class="gap">${(g+'').replace(/</g,'&lt;')}</span>`).join('');
-    box.innerHTML = `<div class="score">${(r.score*100).toFixed(0)} 分</div>
-      <div class="gaps">${gaps?'缺失/出错：'+gaps:'无明显 gap'}</div>
-      <div class="fb">${(r.feedback||'').replace(/</g,'&lt;')}</div>`;
+    const gaps = (r.gaps||[]).map(g=>`<span class="gap-tag">${esc(g)}</span>`).join('');
+    box.innerHTML = `<div class="item"><span class="score-ring">${(r.score*100).toFixed(0)}</span><span class="muted"> / 100</span>
+      <div style="margin-top:8px;">${gaps?'<span class="muted">缺失 / 出错：</span>'+gaps:'<span class="pill auto">无明显 gap</span>'}</div>
+      <div class="b" style="margin-top:8px;">${esc(r.feedback)}</div></div>`;
     await loadMastery();
   }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
 }
@@ -444,25 +712,36 @@ async function doQuestions(){
   const nid = $('#verify-node').value; if(!nid){ toast('请选节点'); return; }
   const box = $('#questions-result'); box.innerHTML='<div class="empty">生成中…</div>';
   try{ const r = await api('/api/verify/questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nid:+nid,n:3})});
-    box.innerHTML = (r.questions||[]).map((q,i)=>`<div class="q">${i+1}. ${(q+'').replace(/</g,'&lt;')}</div>`).join('') || '<div class="empty">无</div>';
+    box.innerHTML = (r.questions||[]).map((q,i)=>`<div class="item" style="margin-top:8px;"><b style="color:var(--accent-text);margin-right:6px;">Q${i+1}</b>${esc(q)}</div>`).join('') || '<div class="empty">无</div>';
   }catch(e){ box.innerHTML=''; toast('失败: '+e.message); }
 }
-async function loadMastery(){
-  try{ const m = await api('/api/mastery');
-    $('#mastery-tag').textContent = `· 总掌握度 ${(m.avg*100).toFixed(0)}% · 已验证 ${m.verified}/${m.total}`;
-  }catch(e){ /* 静默 */ }
-}
-document.addEventListener('click', e=>{
+$('#verify-tabs').addEventListener('click', e=>{
   const t = e.target.closest('.tab'); if(!t) return;
-  document.querySelectorAll('#verify-tabs .tab').forEach(b=>b.classList.remove('active'));
-  t.classList.add('active');
-  _verifyMode = t.dataset.mode;
+  $$('#verify-tabs .tab').forEach(b=>b.classList.remove('active'));
+  t.classList.add('active'); _verifyMode = t.dataset.mode;
   ['#verify-blind','#verify-feynman','#verify-questions'].forEach(s=>$(s).style.display='none');
-  const pane = {blind:'#verify-blind', feynman:'#verify-feynman', questions:'#verify-questions'}[_verifyMode];
-  if(pane) $(pane).style.display='block';
+  $({blind:'#verify-blind', feynman:'#verify-feynman', questions:'#verify-questions'}[_verifyMode]).style.display='block';
 });
 
-(async function init(){ try{ await Promise.all([loadStats(),loadGraph(),loadRecall(),loadEdges(),loadConflicts(),loadVerifyNodes(),loadMastery()]); }catch(e){ toast('加载失败: '+e.message); } })();
+/* ---------- 掌握度 ---------- */
+async function loadMastery(){
+  try{ const m = await api('/api/mastery');
+    const pct = Math.round(m.avg*100);
+    $('#mastery-ring').style.setProperty('--p', pct);
+    $('#mastery-pct').textContent = pct;
+    $('#mastery-label').textContent = pct+'%';
+  }catch(e){ /* 静默 */ }
+}
+
+/* ---------- 刷新 ---------- */
+async function refreshAll(){
+  await Promise.all([loadStats(), loadGraph(), loadRecall(), loadEdges(), loadConflicts(), loadVerifyNodes(), loadMastery()]);
+}
+(async function init(){
+  try{ await refreshAll();
+    renderGraphInto('graph-dashboard');
+  }catch(e){ toast('加载失败: '+e.message); }
+})();
 </script>
 </body>
 </html>

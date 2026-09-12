@@ -17,6 +17,6 @@ fi
 rm -rf "$DIST"
 mkdir -p "$DIST/lib"
 cp "$SRC/index.html" "$DIST/"
-cp "$SRC/lib/echarts.min.js" "$DIST/lib/"
+cp "$SRC"/lib/* "$DIST/lib/"
 echo "web 端已打包：$DIST"
 echo "零配置 web 模式（无需此产物）：ke serve --port 8000"
