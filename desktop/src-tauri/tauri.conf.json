@@ -28,7 +28,7 @@
     "active": true,
     "targets": "all",
     "resources": [
-      "resources/knowledge-engine-backend"
+      "resources/knowledge-engine-backend*"
     ],
     "icon": [
       "icons/32x32.png",
