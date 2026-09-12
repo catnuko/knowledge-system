@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::{Manager, RunEvent};
-use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 /// 剪贴板文本采集快捷键（跨平台：Cmd+Shift+C 在 mac，Ctrl+Shift+C 在其他）
 fn capture_shortcut() -> Shortcut {
@@ -86,10 +86,14 @@ fn resolve_backend_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<Strin
             return Some((PathBuf::from(cmd), Vec::new()));
         }
     }
-    // 2. 随包分发的 PyInstaller 单文件后端
+    // 2. 随包分发的 PyInstaller 单文件后端（资源目录布局因打包方式而异，逐个候选查找）
     if let Ok(dir) = app.path().resource_dir() {
-        let bundled = dir.join("knowledge-engine-backend");
-        if bundled.is_file() {
+        let candidates = [
+            dir.join("knowledge-engine-backend"),
+            dir.join("resources/knowledge-engine-backend"),
+            dir.join("_up_/backend-dist/knowledge-engine-backend"),
+        ];
+        if let Some(bundled) = candidates.into_iter().find(|p| p.is_file()) {
             return Some((bundled, Vec::new()));
         }
     }
@@ -170,7 +174,13 @@ pub fn run() {
 
             if let Some(mut win) = app.get_webview_window("main") {
                 let url = format!("http://127.0.0.1:{port}");
-                if win.set_url(url.parse().expect("后端 URL 解析失败")).is_ok() {
+                // set_url 在当前 tauri v2 中已移除，用 eval 导航到后端面板
+                if win
+                    .eval(&format!(
+                        "window.location.replace('{url}')"
+                    ))
+                    .is_ok()
+                {
                     win.set_title(&format!("知识网络 · knowledge-engine（{url}）")).ok();
                 }
             }
@@ -184,7 +194,7 @@ pub fn run() {
                     }
                     // 读剪贴板文本，POST 到后端
                     use tauri_plugin_clipboard_manager::ClipboardExt;
-                    match h.clipboard().get_text() {
+                    match h.clipboard().read_text() {
                         Ok(text) if !text.trim().is_empty() => {
                             post_clipboard_to_backend(backend_port(), &text);
                             if let Some(win) = h.get_webview_window("main") {

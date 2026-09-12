@@ -19,7 +19,7 @@ python3 -c "import PyInstaller" 2>/dev/null || { echo "缺少 PyInstaller：pip 
 rm -rf desktop/backend-dist
 python3 -m PyInstaller --noconfirm --clean --onefile \
   --name knowledge-engine-backend \
-  --add-data "knowledge_engine/web/static:knowledge_engine/web/static" \
+  --add-data "$ROOT/knowledge_engine/web/static:knowledge_engine/web/static" \
   --collect-all knowledge_engine \
   --collect-all jieba \
   --hidden-import uvicorn.logging \
