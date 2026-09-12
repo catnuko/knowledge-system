@@ -79,6 +79,10 @@ class LLMProvider(ABC):
                 base.append(f"“{title}”与哪些已学知识冲突或印证？")
         return base[:n]
 
+    def ping(self) -> dict:
+        """连通性测试。返回 {ok, detail?, error?}。"""
+        return {"ok": True, "detail": "rule 模式（确定性规则实现，无网络调用）"}
+
 
 def get_provider(cfg: Config | None = None) -> LLMProvider:
     cfg = cfg or Config()

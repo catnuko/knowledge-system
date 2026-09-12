@@ -5,6 +5,30 @@ import requests
 
 from .base import LLMProvider
 
+LLM_PRESETS = {
+    "custom": {"label": "自定义 OpenAI 兼容", "base": "", "model": ""},
+    "deepseek": {
+        "label": "DeepSeek",
+        "base": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+    },
+    "siliconflow": {
+        "label": "硅基流动 SiliconFlow",
+        "base": "https://api.siliconflow.cn/v1",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+    },
+    "dashscope": {
+        "label": "阿里云百炼（Qwen）",
+        "base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-plus",
+    },
+    "zhipu": {
+        "label": "智谱 GLM",
+        "base": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-4-flash",
+    },
+}
+
 ATOMIZE_SYS = (
     "你是知识整理助手。把用户提供的文本拆解为若干条原子笔记。"
     "规则：①一条笔记只表达一个主张；②用用户自己的语言重新组织；③每条 body 不超过 200 字。"
@@ -48,6 +72,14 @@ class OpenAIProvider(LLMProvider):
             return r.json()["choices"][0]["message"]["content"]
         except Exception as e:
             raise RuntimeError(f"LLM 调用失败: {e}") from e
+
+    def ping(self) -> dict:
+        """连通性测试：一次最小 chat 请求。"""
+        try:
+            self._chat("你是连通性测试助手。", "回复 OK 两个字母即可。", json_mode=False)
+            return {"ok": True, "detail": f"{self.model} @ {self.base} 连通正常"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)[:300]}
 
     def atomize(self, text: str) -> list[dict]:
         try:

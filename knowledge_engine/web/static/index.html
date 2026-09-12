@@ -65,6 +65,18 @@
   .card h2 { font-size:14.5px; font-weight:650; display:flex; align-items:center; gap:8px; }
   .card h2 .hint { font-weight:400; color:var(--muted); font-size:12px; }
   .card h2 .spacer { flex:1; }
+
+  /* ---------- 设置 ---------- */
+  .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:1000px){ .settings-grid { grid-template-columns:1fr; } }
+  .form-row { margin:12px 0; }
+  .form-row label { display:block; font-size:12.5px; font-weight:600; color:var(--muted); margin-bottom:5px; }
+  .form-actions { display:flex; align-items:center; gap:8px; margin-top:14px; }
+  .form-actions .spacer { flex:1; }
+  .form-note { font-size:12px; color:var(--muted); margin:10px 0 0; line-height:1.55; }
+  .set-status { font-size:12px; font-weight:600; }
+  .set-status.ok { color:#16a34a; }
+  .set-status.err { color:var(--err); }
   .grid { display:grid; gap:16px; }
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:8px 16px; border:none; border-radius:var(--radius-sm);
          background:var(--accent); color:#fff; font-size:13px; font-weight:550; cursor:pointer; transition:all .15s; white-space:nowrap; }
@@ -204,6 +216,9 @@
     <a data-view="ask">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-8 8H5l-2 2V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/></svg>
       问答</a>
+    <a data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      设置</a>
   </nav>
   <div class="side-foot">
     <div class="mastery-ring" id="mastery-ring" style="position:relative"><b id="mastery-pct"></b></div>
@@ -353,6 +368,50 @@
       </div>
     </div>
 
+    <!-- 设置 -->
+    <div class="view" id="view-settings">
+      <div class="settings-grid">
+        <div class="card">
+          <h2>LLM 服务 <span class="hint">原子化 / 问答 / Feynman 评分 / 综合</span><span class="spacer"></span>
+            <span id="llm-status" class="set-status"></span></h2>
+          <div class="form-row"><label>服务商预设</label>
+            <select id="set-llm-preset" onchange="onLlmPreset()"></select></div>
+          <div class="form-row"><label>API Base URL</label>
+            <input type="text" id="set-llm-base" placeholder="https://api.deepseek.com/v1"></div>
+          <div class="form-row"><label>模型</label>
+            <input type="text" id="set-llm-model" placeholder="deepseek-chat"></div>
+          <div class="form-row"><label>API Key <span id="llm-key-hint" class="hint"></span></label>
+            <input type="password" id="set-llm-key" placeholder="sk-…" autocomplete="off"></div>
+          <div class="form-actions">
+            <button class="btn ghost sm" onclick="testLlm()">测试连接</button>
+            <span class="spacer"></span>
+            <button class="btn ghost sm" onclick="saveSettings('rule')">仅用规则模式</button>
+            <button class="btn sm" onclick="saveSettings('openai')">保存并启用</button>
+          </div>
+          <p class="form-note">留空 Key 并"仅用规则模式"可离线运行（功能降级）。Key 保存到本机 ~/.knowledge_engine/config.json，仅本地使用。</p>
+        </div>
+
+        <div class="card">
+          <h2>音频转写 <span class="hint">采集音频自动转文字（在线 API）</span><span class="spacer"></span>
+            <span id="asr-status" class="set-status"></span></h2>
+          <div class="form-row"><label>服务商预设</label>
+            <select id="set-asr-preset" onchange="onAsrPreset()"></select></div>
+          <div class="form-row" id="asr-custom-base-row" style="display:none;"><label>API Base URL</label>
+            <input type="text" id="set-asr-base" placeholder="https://…/v1"></div>
+          <div class="form-row" id="asr-custom-model-row" style="display:none;"><label>模型</label>
+            <input type="text" id="set-asr-model" placeholder="qwen3-asr-flash"></div>
+          <div class="form-row"><label>API Key <span id="asr-key-hint" class="hint"></span></label>
+            <input type="password" id="set-asr-key" placeholder="sk-…" autocomplete="off"></div>
+          <div class="form-actions">
+            <button class="btn ghost sm" onclick="testAsr()">测试连接</button>
+            <span class="spacer"></span>
+            <button class="btn sm" onclick="saveAsr()">保存</button>
+          </div>
+          <p class="form-note">支持硅基流动（SenseVoice）、阿里云百炼（Qwen-ASR）、智谱（GLM-ASR）或任意 OpenAI 兼容转写端点。</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -369,7 +428,7 @@ let toastTimer;
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200); }
 
 /* ---------- 视图切换 ---------- */
-const VIEW_TITLE = { dashboard:'总览', graph:'知识图谱', ingest:'采集', review:'间隔重复复习', verify:'主动验证', ask:'对话问答' };
+const VIEW_TITLE = { dashboard:'总览', graph:'知识图谱', ingest:'采集', review:'间隔重复复习', verify:'主动验证', ask:'对话问答', settings:'设置' };
 let _view = 'dashboard';
 function switchView(v){
   _view = v;
@@ -379,6 +438,103 @@ function switchView(v){
   if(v==='dashboard') setTimeout(()=>renderGraphInto('graph-dashboard'),60);
   if(v==='graph') setTimeout(()=>renderGraphInto('graph-full'),60);
   if(v==='review') renderFlash();
+  if(v==='settings') loadSettings();
+}
+
+/* ---------- 设置 ---------- */
+let _settings = null;
+
+async function loadSettings(){
+  try {
+    _settings = await api('/api/settings');
+  } catch(e){ toast('加载设置失败'); return; }
+  const fillPreset = (sel, presets, current) => {
+    sel.innerHTML = Object.entries(presets)
+      .map(([k,p]) => `<option value="${k}">${esc(p.label||k)}</option>`).join('');
+    sel.value = presets[current] ? current : 'custom';
+  };
+  fillPreset($('#set-llm-preset'), _settings.llm.presets, _settings.llm.provider);
+  fillPreset($('#set-asr-preset'), _settings.asr.presets, _settings.asr.provider);
+  $('#set-llm-base').value = _settings.llm.base || '';
+  $('#set-llm-model').value = _settings.llm.model || '';
+  $('#set-llm-key').value = '';
+  $('#set-llm-key').placeholder = _settings.llm.has_key ? `已保存（${_settings.llm.key_masked}），留空保持不变` : 'sk-…';
+  $('#set-asr-key').value = '';
+  $('#set-asr-key').placeholder = _settings.asr.has_key ? `已保存（${_settings.asr.key_masked}），留空保持不变` : 'sk-…';
+  $('#set-asr-base').value = _settings.asr.provider==='custom' ? (_settings.asr.base||'') : '';
+  $('#set-asr-model').value = _settings.asr.provider==='custom' ? (_settings.asr.model||'') : '';
+  onLlmPreset(); onAsrPreset();
+  set_status('llm-status', _settings.llm.provider==='openai' && _settings.llm.has_key ? '已启用 LLM' : '规则模式（降级）', 'ok');
+  set_status('asr-status', _settings.asr.has_key ? '已配置' : '未配置', 'ok');
+}
+
+function set_status(id, text, cls){ const el=$('#'+id); el.textContent=text; el.className='set-status '+cls; }
+
+function onLlmPreset(){
+  const p = _settings?.llm?.presets?.[$('#set-llm-preset').value];
+  if(p && p.base){ $('#set-llm-base').value = p.base; $('#set-llm-model').value = p.model; }
+}
+
+function onAsrPreset(){
+  const k = $('#set-asr-preset').value;
+  const p = _settings?.asr?.presets?.[k];
+  const custom = k==='custom' || !p || !p.base;
+  $('#asr-custom-base-row').style.display = custom ? '' : 'none';
+  $('#asr-custom-model-row').style.display = custom ? '' : 'none';
+  if(p && p.base){ $('#set-asr-base').value = p.base; $('#set-asr-model').value = p.model; }
+}
+
+function _collectSettings(mode){
+  const s = { llm_provider: mode, llm_base: $('#set-llm-base').value.trim(), llm_model: $('#set-llm-model').value.trim() };
+  const key = $('#set-llm-key').value.trim();
+  if(key) s.llm_key = key;
+  return s;
+}
+
+async function saveSettings(mode){
+  const s = _collectSettings(mode);
+  if(mode==='openai' && !s.llm_key && !_settings?.llm?.has_key){ toast('请先填写 API Key'); return; }
+  try { _settings = await api('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({settings:s})}); }
+  catch(e){ toast('保存失败'); return; }
+  $('#set-llm-key').placeholder = _settings.llm.has_key ? `已保存（${_settings.llm.key_masked}），留空保持不变` : 'sk-…';
+  $('#set-llm-key').value = '';
+  set_status('llm-status', mode==='openai' ? '已启用 LLM' : '规则模式（降级）', 'ok');
+  toast(mode==='openai' ? '已保存，LLM 已启用' : '已保存，当前为规则模式');
+}
+
+async function saveAsr(){
+  const p = $('#set-asr-preset').value;
+  const s = { asr_provider: p, asr_key: $('#set-asr-key').value.trim(), asr_base: $('#set-asr-base').value.trim(), asr_model: $('#set-asr-model').value.trim() };
+  if(!s.asr_key && !_settings?.asr?.has_key){ toast('请先填写 API Key'); return; }
+  if(!s.asr_key) delete s.asr_key;
+  try { _settings = await api('/api/settings', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({settings:s})}); }
+  catch(e){ toast('保存失败'); return; }
+  $('#set-asr-key').placeholder = _settings.asr.has_key ? `已保存（${_settings.asr.key_masked}），留空保持不变` : 'sk-…';
+  $('#set-asr-key').value = '';
+  set_status('asr-status', '已配置', 'ok');
+  toast('音频转写设置已保存');
+}
+
+async function testLlm(){
+  const s = _collectSettings('openai');
+  if(s.llm_key) await saveSettings('openai');
+  set_status('llm-status', '测试中…', '');
+  try {
+    const r = await api('/api/settings/test-llm', {method:'POST'});
+    if(r.ok) set_status('llm-status', '✓ ' + (r.detail||'连通正常'), 'ok');
+    else set_status('llm-status', '✗ ' + (r.error||'失败'), 'err');
+  } catch(e){ set_status('llm-status', '✗ ' + e.message.slice(0,80), 'err'); }
+}
+
+async function testAsr(){
+  const key = $('#set-asr-key').value.trim();
+  if(key) await saveAsr();
+  set_status('asr-status', '测试中…', '');
+  try {
+    const r = await api('/api/settings/test-asr', {method:'POST'});
+    if(r.ok) set_status('asr-status', '✓ ' + (r.detail||'连通正常'), 'ok');
+    else set_status('asr-status', '✗ ' + (r.error||'失败'), 'err');
+  } catch(e){ set_status('asr-status', '✗ ' + e.message.slice(0,80), 'err'); }
 }
 $('#nav').addEventListener('click', e=>{ const a=e.target.closest('a'); if(a) switchView(a.dataset.view); });
 
