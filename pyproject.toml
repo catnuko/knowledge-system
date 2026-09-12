@@ -1,6 +1,6 @@
 [project]
 name = "secondme"
-version = "0.3.0"
+version = "1.0.0"
 description = "SecondMe · 第二个我 — Personal knowledge network: multi-source capture → AI atomization → scientific knowledge graph (Zettelkasten + KST + FSRS)"
 readme = "README.md"
 license = { text = "MIT" }
