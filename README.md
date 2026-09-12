@@ -2,50 +2,95 @@
 
 [中文文档](README_zh.md) | **English**
 
-Multi-source capture (text / links / audio) → AI atomization → a personal knowledge network that grows continuously, grounded in cognitive science theory.
+> ## ⚠️ Work in Progress
+>
+> This project is in an **early stage of active development**. Interfaces, data models, and
+> features may change at any time. **No guarantees of usability**: you may encounter bugs,
+> missing features, or documentation that does not match actual behavior.
+> Trials and feedback are welcome — but do not rely on this project in production or with
+> data you care about. See [Releases](https://github.com/catnuko/knowledge-system/releases)
+> for current builds.
 
-## Status: MVP v0.2
+Multi-source capture (text / links / files) → AI atomization → a personal knowledge network
+that grows continuously, grounded in cognitive science theory.
 
-A local-first, single-file SQLite (with vector retrieval and full-text search) knowledge network engine. **No API key required to run the full loop**: capture → atomize → scientific linking → spaced repetition recall → synthesis → conflict detection → conversational Q&A → active verification (Feynman).
+## Current Status: v0.3.0
 
-## Quick Start
+A local-first knowledge network engine on a single-file SQLite database (with vector search
+and full-text indexing). The full loop runs without any API key:
+capture → atomize → scientific linking → spaced-repetition recall → synthesis → conflict
+detection → conversational Q&A → active verification (Feynman).
+
+- **Web panel** (redesigned in v0.3): desktop-first modern UI with a sidebar and six views
+  (Dashboard / Graph / Capture / Review / Verify / Ask); flashcard-style review with full
+  keyboard support
+- **Desktop app**: Tauri v2 shell; macOS and Windows installers are built and published
+  automatically by CI (Windows builds are unsigned — SmartScreen will warn on install)
+- **Release automation**: Conventional Commits + release-please; merging the release PR bumps
+  versions, generates the changelog, and publishes installers for both platforms
+
+### Known Limitations
+
+- In the default `rule` mode, Q&A / Feynman scoring / synthesis are rule-based fallbacks with
+  limited quality; full LLM capability requires an OpenAI-compatible API
+- The packaged desktop app does **not** include audio transcription (FunASR + model size);
+  running from source via CLI does
+- Windows installers are not code-signed
+- Data model and APIs may change incompatibly between versions (no migration guarantees)
+
+## Quick Start (from source)
 
 ```bash
-# Install with uv (recommended): auto-creates venv + locks dependencies
-uv sync                    # Install deps (sqlite-vec / fsrs / trafilatura / jieba / fastapi)
-uv run ke ingest-text "Spaced repetition schedules reviews along the forgetting curve to improve long-term retention" --title "Spaced Repetition"
-ke ingest-file notes.md     # Local files
-ke ingest-url https://example.com/article   # Web extraction (trafilatura)
-ke link --all               # Link: auto-edges + suggestion box + orphan marking
-ke recall                   # Today's due cards
-ke review 1 good            # Rate: again / hard / good / easy
-ke synthesize               # Weekly synthesis (connected components → summary → new node back into graph)
-ke conflicts                # Conflict detection report
-ke stats                    # Metrics dashboard (mastery_avg / Feynman count)
-ke serve --port 8000        # Web panel (graph / capture / recall / suggestions / conflicts / Q&A / active verification)
-# Or: uv run ke serve --port 8000
+# uv (recommended): auto-creates venv + locks dependencies
+uv sync                    # installs sqlite-vec / fsrs / trafilatura / jieba / fastapi
+uv run ke serve --port 8000   # open http://127.0.0.1:8000 for the web panel
 ```
 
-### Web Panel Modules
+CLI usage:
 
-- **Conversational Q&A**: GraphRAG recall → graph expansion → conflict awareness → forced citation `[#node_id]`, rule mode degrades to node list
-- **Active Verification**: Three modes — blind test (frontend hides original + self-rating syncs FSRS) / Feynman (user paraphrase → LLM finds gaps + scores + persists) / generated questions (LLM generates open-ended verification questions per node)
-- **Mastery Metrics**: FSRS retention (reps/stability) + Feynman average weighted, outputs per-node and library-wide grade distribution
+```bash
+uv run ke ingest-text "Spaced repetition schedules reviews along the forgetting curve" --title "Spaced Repetition"
+uv run ke ingest-file notes.md             # local files
+uv run ke ingest-url https://example.com   # web extraction (trafilatura)
+uv run ke link --all                       # link: auto edges + suggestion box + orphan marking
+uv run ke recall                           # today's due cards
+uv run ke review 1 good                    # rate: again / hard / good / easy
+uv run ke synthesize                       # weekly synthesis (components → summary back into graph)
+uv run ke conflicts                        # conflict detection report
+uv run ke stats                            # metrics dashboard (mastery / Feynman count)
+```
+
+## Desktop Installers
+
+Download from [Releases](https://github.com/catnuko/knowledge-system/releases) (built by
+GitHub Actions):
+
+| Platform | Artifacts |
+|---|---|
+| macOS (Apple Silicon) | `knowledge-engine_vX.Y.Z_aarch64.dmg` / `_macos_app.zip` |
+| Windows x64 | NSIS installer `.exe` / `.msi` |
+
+The app starts its bundled backend automatically and opens the panel; data lives in
+`~/.knowledge_engine/`.
 
 ## Core Philosophy
 
-- **Capture is not a barrier**: 5 source types (browser, clipboard, Feishu, URL extraction, audio transcription + image OCR) extensible via adapter pattern, all unified into a "text intermediate state"
-- **Scientific linking**: Network = atomic nodes + 9 typed propositional directed edges + prerequisite DAG, every edge is explainable and auditable — no "similarity means connection"
-- **Growth is the main engine**: FSRS daily recall + weekly community synthesis + conflict detection + Feynman active verification — the north star metric is mastery, not storage volume
+- **Capture is not a barrier**: multiple source types (browser extension, clipboard, URL
+  extraction, files, audio transcription) extend via adapters, all unified into a "text
+  intermediate state"
+- **Scientific linking**: network = atomic nodes + 9 typed propositional directed edges +
+  prerequisite DAG; every edge is explainable and auditable — no "similarity means connection"
+- **Growth is the main engine**: FSRS daily recall + weekly community synthesis + conflict
+  detection + Feynman active verification — the north star metric is mastery, not storage volume
 
 ## Scientific Foundation
 
 | Theory | Design Rule |
 |---|---|
-| Ausubel Assimilation Theory | New nodes must link to existing structure, otherwise enter pending pool |
+| Ausubel Assimilation Theory | New nodes must link to existing structure, otherwise enter the pending pool |
 | Novak Concept Maps | Edges must be typed propositions (9 directed edge types) |
-| Knowledge Space Theory (KST) | Prerequisite DAG determines learning & recall order, cycle detection enforced |
-| Retrieval Practice + FSRS | Schedule recall along forgetting curve, prompts first |
+| Knowledge Space Theory (KST) | Prerequisite DAG determines learning & recall order; cycle detection enforced |
+| Retrieval Practice + FSRS | Schedule recall along the forgetting curve, prompts first |
 | GraphRAG | Weekly synthesis based on graph communities |
 
 ## Architecture (5 Layers + Growth Loop)
@@ -62,7 +107,8 @@ text/file/URL/audio  |  atomize/dedup/quality gate  |  SQLite+vec0+FTS5  |  reca
 - `edges` — 9 typed propositional edges (implies/supports/contradicts/exemplifies/refines/prerequisite_of/contrasts/merges/relates)
 - `verifications` — active verification log (mode: feynman/recall/generative + paraphrase/gaps/score/feedback)
 - `node_vec` (vec0 vector KNN) + `node_fts` (trigram full-text) — dual-channel recall
-- Graph queries: recursive CTE, no graph database (migration trigger: nodes >10⁵ or need real-time graph algorithms)
+- Graph queries use recursive CTEs, no graph database (migration trigger: nodes > 10⁵ or
+  real-time graph algorithms needed)
 
 ## Link Gating (Auditable)
 
@@ -77,69 +123,29 @@ text/file/URL/audio  |  atomize/dedup/quality gate  |  SQLite+vec0+FTS5  |  reca
 | Variable | Default | Description |
 |---|---|---|
 | `KE_DB` | `~/.knowledge_engine/ke.db` | Database path |
-| `KE_LLM` | `rule` | `rule`=rule mode (zero deps); `openai`=OpenAI-compatible API |
-| `KE_LLM_KEY` / `KE_LLM_BASE` / `KE_LLM_MODEL` | — / deepseek / deepseek-chat | e.g. DeepSeek or Qwen |
-| `KE_EMBEDDING` | `light` | `light`=built-in lightweight vector; `bge`=BGE-small-zh local semantic model (recommended) |
+| `KE_LLM` | `rule` | `rule` = rule mode (zero deps); `openai` = OpenAI-compatible API |
 
-### Enable BGE Semantic Embedding (Recommended)
+## Development
 
 ```bash
-uv pip install torch transformers      # CPU torch: uv pip install torch --index-url https://download.pytorch.org/whl/cpu
-# First call auto-downloads BAAI/bge-small-zh-v1.5 (~100MB) from HuggingFace
-export KE_EMBEDDING=bge
-ke ingest-text "..."
-ke link --all
+uv run pytest -q           # test suite
+bash web/build.sh          # static web packaging → web/dist/
+bash desktop/scripts/build-backend.sh   # PyInstaller backend binary (for release)
+# Desktop local dev: cd desktop && npm install && npm run tauri:dev
 ```
 
-> Note: Switching embedding backends changes vector semantics — recommend rebuilding the knowledge base (`rm ~/.knowledge_engine/ke.db*`).
+CI (GitHub Actions):
+- `CI` — tests on push/PR
+- `Release Please` — release PR (auto version bump + changelog); merging it builds macOS /
+  Windows artifacts and publishes the Release automatically
+- `Build & Release` — manual packaging (tag selectable)
 
-### Enable OpenAI-Compatible LLM (improves atomization/linking/synthesis quality)
+## Docs
 
-```bash
-export KE_LLM=openai KE_LLM_KEY=sk-xxx KE_LLM_BASE=https://api.deepseek.com/v1 KE_LLM_MODEL=deepseek-chat
-```
-
-### Audio Sources (interface reserved)
-
-```bash
-uv pip install funasr modelscope    # Audio transcription (Chinese-optimized, local inference)
-```
-
-## Testing
-
-```bash
-uv run pytest tests/ -q        # 44+ tests: storage/pipeline/linking/recall/Q&A/active verification/maturity (9 edge types × gating × DAG × synthesis × conflict × metrics × orphan)
-uv run bash scripts/smoke.sh    # End-to-end smoke: capture→link→recall→synthesize→conflicts→metrics
-```
-
-## Documentation
-
-- `docs/architecture.md` — Architecture & data model, 9 edge type definitions, link gating, FSRS/GraphRAG/Feynman mechanisms, API reference
-- `docs/knowledge-system-mvp-plan.html` — MVP architecture & implementation plan v1.1
-
-## Packaging: Desktop / Web
-
-Same frontend (`knowledge_engine/web/static/`), three deployment forms:
-
-| Form | Method | Notes |
-|---|---|---|
-| Web (zero config) | `ke serve --port 8000` | Backend serves panel directly |
-| Web (static deploy) | `bash web/build.sh` | Produces `web/dist/`, Nginx/CDN serves, `/api` reverse proxy (see `web/deploy.example.conf`) |
-| Desktop (Tauri v2) | `cd desktop && npm install && npm run tauri:dev` | Shell auto-starts local backend & loads panel; platform configs in `desktop/src-tauri/configs/{windows,linux,macos}/` |
-
-Desktop and Web share the same panel code — see `desktop/README.md` for desktop details.
-
-## Roadmap (10 Weeks)
-
-| Phase | Content |
-|---|---|
-| Phase 0 (W1) | Data model schema + vec0 + FSRS + capture queue abstraction |
-| Phase 1a (W2-3) | Text & link sources: browser extension / clipboard / Feishu / URL extraction |
-| Phase 1b (W4) | Audio source: FunASR local transcription → summarize into graph |
-| Phase 2 (W6-7) | Linking engine + suggestion box + graph visualization |
-| Phase 3 (W8-9) | Recall queue + weekly synthesis + conflict detection + metrics dashboard |
-| Phase 4 (W10) | 30-day review + extended sources #7+ |
+- `docs/architecture.md` — architecture & data model, 9 edge types, link gating,
+  FSRS/GraphRAG/Feynman mechanisms, API reference
+- `docs/knowledge-system-mvp-plan.html` — MVP architecture & plan v1.1
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Open source, free to use, modify, and distribute.
+MIT — see [LICENSE](LICENSE).
