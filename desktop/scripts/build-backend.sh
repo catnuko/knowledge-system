@@ -17,11 +17,19 @@ command -v python3 >/dev/null || { echo "缺少 python3"; exit 1; }
 python3 -c "import PyInstaller" 2>/dev/null || { echo "缺少 PyInstaller：pip install pyinstaller"; exit 1; }
 
 rm -rf desktop/backend-dist
+# Windows（Git Bash/MSYS）下 --add-data 的分隔符是 ';' 而非 ':'；--noconsole 避免打包出的
+# 后端在 Windows 上运行时弹出控制台黑窗（macOS 不能加，否则会产出 .app 而非单文件）
+SEP="$(python3 -c "import os; print(';' if os.name=='nt' else ':')")"
+EXTRA_ARGS=()
+case "$(python3 -c "import os; print(os.name)")" in
+  nt) EXTRA_ARGS+=(--noconsole) ;;
+esac
 python3 -m PyInstaller --noconfirm --clean --onefile \
   --name knowledge-engine-backend \
-  --add-data "$ROOT/knowledge_engine/web/static:knowledge_engine/web/static" \
+  --add-data "${ROOT}/knowledge_engine/web/static${SEP}knowledge_engine/web/static" \
   --collect-all knowledge_engine \
   --collect-all jieba \
+  ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
   --hidden-import uvicorn.logging \
   --hidden-import uvicorn.loops \
   --hidden-import uvicorn.loops.auto \

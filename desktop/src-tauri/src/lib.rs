@@ -77,6 +77,11 @@ fn is_up(port: u16) -> bool {
     TcpStream::connect_timeout(&backend_addr(port), CONNECT_TIMEOUT).is_ok()
 }
 
+/// 随包分发的后端可执行文件名（Windows 上 PyInstaller 产物带 .exe 后缀）
+fn backend_binary_name() -> &'static str {
+    if cfg!(windows) { "knowledge-engine-backend.exe" } else { "knowledge-engine-backend" }
+}
+
 /// 按优先级解析后端启动命令。
 fn resolve_backend_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<String>)> {
     // 1. 显式指定（可执行文件路径）
@@ -88,10 +93,11 @@ fn resolve_backend_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<Strin
     }
     // 2. 随包分发的 PyInstaller 单文件后端（资源目录布局因打包方式而异，逐个候选查找）
     if let Ok(dir) = app.path().resource_dir() {
+        let name = backend_binary_name();
         let candidates = [
-            dir.join("knowledge-engine-backend"),
-            dir.join("resources/knowledge-engine-backend"),
-            dir.join("_up_/backend-dist/knowledge-engine-backend"),
+            dir.join(name),
+            dir.join("resources").join(name),
+            dir.join("_up_/backend-dist").join(name),
         ];
         if let Some(bundled) = candidates.into_iter().find(|p| p.is_file()) {
             return Some((bundled, Vec::new()));
