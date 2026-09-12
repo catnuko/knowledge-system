@@ -1,7 +1,7 @@
 """PyInstaller 打包入口：按 KE_PORT（默认 8000）启动知识引擎面板服务。
 
 仅用于发布桌面端时把 Python 后端打成单文件二进制，随 Tauri 应用分发。
-开发模式不经过这里，直接使用 `ke serve`。
+开发模式不经过这里，直接使用 `python -m knowledge_engine.web`。
 """
 import os
 

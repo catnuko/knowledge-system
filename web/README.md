@@ -7,7 +7,7 @@ Web 端与桌面端共用同一份静态面板（`knowledge_engine/web/static/`�
 后端直接托管面板，一条命令启动：
 
 ```bash
-ke serve --port 8000
+python3 -m knowledge_engine.web --port 8000
 # 浏览器打开 http://127.0.0.1:8000
 ```
 

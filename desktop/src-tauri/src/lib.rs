@@ -5,7 +5,7 @@
 //!   2. 没有则按优先级拉起后端：
 //!        环境变量 KE_BACKEND_CMD（可执行文件路径）
 //!        > 随包分发的单文件后端（resource_dir/knowledge-engine-backend，PyInstaller 产物）
-//!        > 开发模式 `ke serve --port <KE_PORT>`（pip install -e . 后可用，host 固定 127.0.0.1）
+//!        > 开发模式 `python -m knowledge_engine.web --port <KE_PORT>`（需先安装本包，host 固定 127.0.0.1）
 //!   3. 轮询等待后端就绪（最长约 60s）；
 //!   4. 主窗口跳转到 http://127.0.0.1:<KE_PORT>（与后端同源，面板零改动复用）。
 //!
@@ -103,12 +103,14 @@ fn resolve_backend_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<Strin
             return Some((bundled, Vec::new()));
         }
     }
-    // 3. 开发模式：ke CLI（pip install -e . 后位于 PATH）。注意 ke serve 仅支持 --port，
-    //    host 在实现中固定为 127.0.0.1
+    // 3. 开发模式：python -m knowledge_engine.web（需先 uv sync 安装本包）。
+    //    host 在实现中固定为 127.0.0.1；Windows 下一般只有 `python` 而无 `python3`
+    let py = if cfg!(windows) { "python" } else { "python3" };
     Some((
-        PathBuf::from("ke"),
+        PathBuf::from(py),
         vec![
-            "serve".into(),
+            "-m".into(),
+            "knowledge_engine.web".into(),
             "--port".into(),
             backend_port().to_string(),
         ],
@@ -118,7 +120,7 @@ fn resolve_backend_command(app: &tauri::AppHandle) -> Option<(PathBuf, Vec<Strin
 /// 拉起后端进程，标准输出/错误写入应用日志目录 backend.log。
 fn spawn_backend(app: &tauri::AppHandle) -> std::io::Result<Child> {
     let (cmd, args) =
-        resolve_backend_command(app).expect("无法定位后端启动命令（KE_BACKEND_CMD / 打包后端 / ke CLI）");
+        resolve_backend_command(app).expect("无法定位后端启动命令（KE_BACKEND_CMD / 打包后端 / 本地 python）");
     let mut command = Command::new(&cmd);
     command.args(&args).env("KE_PORT", backend_port().to_string());
 
@@ -160,7 +162,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let port = backend_port();
 
-            // 已有后端在监听（如用户手动 ke serve）则直接复用，避免重复拉起
+            // 已有后端在监听（如用户手动启动）则直接复用，避免重复拉起
             let child = if is_up(port) {
                 None
             } else {

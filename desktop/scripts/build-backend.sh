@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 把 Python 后端打成单文件二进制（PyInstaller），供 Tauri 桌面端随包分发。
-# 仅发布时需要；开发/调试直接 `npm run tauri:dev`（壳内自动调用 ke serve）。
+# 仅发布时需要；开发/调试直接 `npm run tauri:dev`（壳内自动调用 python -m knowledge_engine.web）。
 #
 # 用法（在仓库根目录执行）：
 #   bash desktop/scripts/build-backend.sh
@@ -16,7 +16,7 @@ command -v cygpath >/dev/null 2>&1 && ROOT="$(cygpath -m "$ROOT")"
 cd "$ROOT"
 
 command -v python3 >/dev/null || { echo "缺少 python3"; exit 1; }
-python3 -c "import PyInstaller" 2>/dev/null || { echo "缺少 PyInstaller：pip install pyinstaller"; exit 1; }
+python3 -c "import PyInstaller" 2>/dev/null || { echo "缺少 PyInstaller：uv pip install pyinstaller"; exit 1; }
 
 rm -rf desktop/backend-dist
 # Windows（Git Bash/MSYS）下 --add-data 的分隔符是 ';' 而非 ':'；--noconsole 避免打包出的

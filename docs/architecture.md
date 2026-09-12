@@ -24,7 +24,7 @@
 文本/文件/URL/音频/图片  |  原子化/去重/质量门  |  SQLite+vec0+FTS5  |  召回/判定/门控/DAG  |  FSRS/综合/冲突/问答/验证
 ```
 
-- **采集层**：浏览器扩展（右键选中文本）、Tauri 全局快捷键（剪贴板）、URL 提取（trafilatura）、音频转写（FunASR）、图片 OCR（rapidocr）。统一为"文本中间态"。
+- **采集层**：浏览器扩展（右键选中文本）、Tauri 全局快捷键（剪贴板）、URL 提取（trafilatura）、音频转写（在线 ASR：硅基流动 / 阿里云百炼 / 智谱 / 自定义 OpenAI 兼容端点，设置面板填 key）、图片 OCR（rapidocr）。统一为"文本中间态"。
 - **加工层**：原子化（rule 段落切分 / LLM 主张拆解）→ SHA256 指纹去重 → 质量门（MIN_BODY=20 字）。
 - **存储层**：单文件 SQLite + vec0 向量 KNN + FTS5 trigram 全文。递归 CTE 做图查询，不引入图数据库。
 - **建链层**：向量 Top-K ∪ FTS Top-K 召回 → 命题判定（9 类）→ 置信度门控 → 前提 DAG 环检测 → 双向去重。
@@ -209,8 +209,9 @@ score = 有 Feynman 时 0.4*fsrs + 0.6*feynman，无则纯 fsrs
 
 - **本地优先**：单文件 SQLite，无外部服务依赖。
 - **sqlite_vec 加载**：优先 `con.load_extension(sqlite_vec.loadable_path())`（最稳），失败回退 `enable_load_extension + sqlite_vec.load`。扩展不可用时向量检索优雅降级为 FTS+全量余弦。
-- **LLM 降级**：无 `KE_LLM_KEY` 时自动用 `RuleProvider`（确定性规则实现，闭环可跑）。
-- **embedding 降级**：`KE_EMBEDDING=light`（内置 512 维确定性向量，零依赖）；`bge`（BGE-small-zh 本地语义模型，需 torch/transformers）。
+- **LLM 降级**：无 key（`rule` 模式）时自动用 `RuleProvider`（确定性规则实现，闭环可跑）。LLM/ASR 配置来源优先级：环境变量 > `~/.knowledge_engine/config.json`（设置面板写入）> 默认值。
+- **ASR 全在线**：OpenAI 兼容 `/audio/transcriptions` 协议，预设硅基流动（SenseVoiceSmall）/ 阿里云百炼（qwen3-asr-flash）/ 智谱（glm-asr）/ 自定义；本地 FunASR 已移除（v0.4）。
+- **embedding**：内置 light 后端（jieba + hashing，512 维确定性，零模型）；BGE 本地语义模型已移除（v0.4）。
 - **CI**：GitHub Actions 跑 pytest + `scripts/smoke.sh` 端到端冒烟。
 
 ---

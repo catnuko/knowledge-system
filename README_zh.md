@@ -22,8 +22,8 @@
 
 ### 已知限制
 
-- 默认 `rule` 模式下问答 / Feynman 评分 / 综合为规则降级实现，效果有限；接入 OpenAI 兼容 API 后才获得完整 LLM 能力
-- 打包后的桌面端**不含音频转写**（FunASR + 模型体积原因）；CLI 源码运行可用
+- 默认 `rule` 模式下问答 / Feynman 评分 / 综合为规则降级实现，效果有限；在设置面板选择 LLM 服务（DeepSeek / 硅基流动 / 百炼 / 智谱 / 自定义）填入 API key 即获得完整 LLM 能力
+- 音频转写为在线 API（硅基流动 SenseVoice / 阿里云百炼 Qwen-ASR / 智谱 GLM-ASR / 自定义 OpenAI 兼容端点），在设置面板填 API key 即用；本地 FunASR 推理已移除
 - Windows 安装包未做代码签名
 - 数据模型与 API 在后续版本可能不兼容（无迁移保证）
 
@@ -32,22 +32,19 @@
 ```bash
 # 用 uv（推荐）：自动创建虚拟环境 + 锁定依赖
 uv sync                    # 安装依赖（sqlite-vec / fsrs / trafilatura / jieba / fastapi）
-uv run ke serve --port 8000   # 打开 http://127.0.0.1:8000 即面板
+uv run python -m knowledge_engine.web --port 8000
+# 打开 http://127.0.0.1:8000 即面板
+
+# 所有操作都在 Web 面板完成：
+#   采集    —— 文本 / URL / 文件 / 音频 / 图片
+#   图谱    —— 查看知识网络、确认建议箱中的候选边
+#   复习    —— 今日到期卡片（again / hard / good / easy）
+#   验证    —— Feynman 主动验证 + 检验提问
+#   问答    —— 基于图谱召回的对话问答
+#   设置    —— 配置 LLM 与音频转写服务（填 API key 即用）
 ```
 
-CLI 方式：
-
-```bash
-uv run ke ingest-text "间隔重复算法通过遗忘曲线安排复习，能提升长期记忆保持率" --title "间隔重复"
-uv run ke ingest-file notes.md             # 本地文件
-uv run ke ingest-url https://example.com   # 网页提取（trafilatura）
-uv run ke link --all                       # 建链：自动边 + 建议箱 + 孤儿标记
-uv run ke recall                           # 今日到期卡片
-uv run ke review 1 good                    # 评分：again / hard / good / easy
-uv run ke synthesize                       # 每周综合（连通分量 → 综述回图）
-uv run ke conflicts                        # 矛盾检测报告
-uv run ke stats                            # 指标面板（掌握度 / Feynman 次数）
-```
+本项目**不再提供命令行界面**（v0.4 起移除 CLI）；自动化 / 集成请直接调用 `/api/*` 接口。
 
 ## 桌面端安装包
 

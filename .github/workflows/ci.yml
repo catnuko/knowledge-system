@@ -31,7 +31,7 @@ jobs:
         run: uv run pytest tests/ -v
 
   smoke:
-    name: End-to-end smoke (CLI closed loop)
+    name: End-to-end smoke (Web API closed loop)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

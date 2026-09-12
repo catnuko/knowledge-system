@@ -1,6 +1,6 @@
 # knowledge-engine 桌面端（Tauri v2）
 
-Tauri v2 壳工程：启动时自动拉起本地 Python 后端（`ke serve`），主窗口加载
+Tauri v2 壳工程：启动时自动拉起本地 Python 后端（`python -m knowledge_engine.web`），主窗口加载
 `http://127.0.0.1:8000` 的 Web 面板。面板代码零改动，桌面端与 Web 端共用同一份前端。
 
 ## 目录结构
@@ -32,7 +32,7 @@ desktop/
 
 | 组件 | 版本 | 用途 |
 |---|---|---|
-| Python | ≥ 3.11，`pip install -e .` | 后端（`ke serve`） |
+| Python + [uv](https://docs.astral.sh/uv/) | ≥ 3.11，`uv sync` | 后端（`uv run python -m knowledge_engine.web`） |
 | Node.js | ≥ 18 | Tauri CLI（`@tauri-apps/cli`） |
 | Rust | stable（rustup 安装） | Tauri 壳编译 |
 
@@ -46,7 +46,7 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev
 ```bash
 cd desktop
 npm install
-npm run tauri:dev        # 启动壳 + 自动拉起 ke serve，窗口打开面板
+npm run tauri:dev        # 启动壳 + 自动拉起本地后端，窗口打开面板
 ```
 
 ## 打包（按平台）
@@ -63,15 +63,15 @@ npm run tauri:build:macos      # 指定 macOS（app + dmg，需在 macOS 上执�
 ## 运行时行为
 
 1. 探测 `127.0.0.1:KE_PORT`（默认 `8000`）是否已有后端监听；
-   - 有：直接复用（如你手动跑了 `ke serve`）；
+   - 有：直接复用（如你手动跑了 `python -m knowledge_engine.web`）；
    - 没有：按优先级拉起后端
      1. 环境变量 `KE_BACKEND_CMD`（可执行文件路径）
      2. 随包分发的 `resource_dir/knowledge-engine-backend`（PyInstaller 单文件）
-     3. 开发模式 `ke serve --port <KE_PORT>`（host 固定 127.0.0.1）
+     3. 开发模式 `python -m knowledge_engine.web --port <KE_PORT>`（host 固定 127.0.0.1）
 2. 轮询等待后端就绪（最长约 60s），随后主窗口跳转到 `http://127.0.0.1:<KE_PORT>`；
 3. 退出应用时自动结束由壳拉起的后端进程。
 
-环境变量（透传给后端）：`KE_DB` / `KE_LLM` / `KE_LLM_KEY` / `KE_LLM_BASE` / `KE_LLM_MODEL` / `KE_EMBEDDING`。
+环境变量（透传给后端，均可不设、在面板「设置」里配置）：`KE_DB` / `KE_LLM` / `KE_LLM_KEY` / `KE_LLM_BASE` / `KE_LLM_MODEL` / `KE_EMBEDDING` / `KE_ASR` / `KE_ASR_KEY` / `KE_ASR_BASE` / `KE_ASR_MODEL`。
 后端日志：应用日志目录下 `backend.log`。
 
 ## 发布桌面安装包（完整分发）

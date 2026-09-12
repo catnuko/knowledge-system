@@ -32,9 +32,11 @@ detection → conversational Q&A → active verification (Feynman).
 ### Known Limitations
 
 - In the default `rule` mode, Q&A / Feynman scoring / synthesis are rule-based fallbacks with
-  limited quality; full LLM capability requires an OpenAI-compatible API
-- The packaged desktop app does **not** include audio transcription (FunASR + model size);
-  running from source via CLI does
+  limited quality; pick an LLM service in the Settings panel (DeepSeek / SiliconFlow /
+  DashScope / Zhipu / custom) and paste an API key for full LLM capability
+- Audio transcription uses online APIs (SiliconFlow SenseVoice / Alibaba DashScope Qwen-ASR /
+  Zhipu GLM-ASR / any OpenAI-compatible endpoint); paste an API key in the Settings panel.
+  Local FunASR inference has been removed
 - Windows installers are not code-signed
 - Data model and APIs may change incompatibly between versions (no migration guarantees)
 
@@ -43,22 +45,20 @@ detection → conversational Q&A → active verification (Feynman).
 ```bash
 # uv (recommended): auto-creates venv + locks dependencies
 uv sync                    # installs sqlite-vec / fsrs / trafilatura / jieba / fastapi
-uv run ke serve --port 8000   # open http://127.0.0.1:8000 for the web panel
+uv run python -m knowledge_engine.web --port 8000
+# open http://127.0.0.1:8000 for the web panel
+
+# Everything happens in the web panel:
+#   Capture  — text / URL / files / audio / images
+#   Graph    — browse the knowledge network, confirm suggested edges
+#   Review   — today's due cards (again / hard / good / easy)
+#   Verify   — Feynman active recall + generated questions
+#   Ask      — graph-grounded Q&A
+#   Settings — configure LLM & audio transcription (paste an API key)
 ```
 
-CLI usage:
-
-```bash
-uv run ke ingest-text "Spaced repetition schedules reviews along the forgetting curve" --title "Spaced Repetition"
-uv run ke ingest-file notes.md             # local files
-uv run ke ingest-url https://example.com   # web extraction (trafilatura)
-uv run ke link --all                       # link: auto edges + suggestion box + orphan marking
-uv run ke recall                           # today's due cards
-uv run ke review 1 good                    # rate: again / hard / good / easy
-uv run ke synthesize                       # weekly synthesis (components → summary back into graph)
-uv run ke conflicts                        # conflict detection report
-uv run ke stats                            # metrics dashboard (mastery / Feynman count)
-```
+This project **no longer ships a command-line interface** (CLI removed in v0.4); for
+automation / integration, call the `/api/*` endpoints directly.
 
 ## Desktop Installers
 
