@@ -11,6 +11,8 @@
 #   （rust 侧会自动在 resource_dir 下查找该文件）
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# Windows Git Bash 下 pwd 是 MSYS 风格（/d/...），原生 Python 不识别，转成 Windows 路径
+command -v cygpath >/dev/null 2>&1 && ROOT="$(cygpath -m "$ROOT")"
 cd "$ROOT"
 
 command -v python3 >/dev/null || { echo "缺少 python3"; exit 1; }
@@ -24,6 +26,8 @@ EXTRA_ARGS=()
 case "$(python3 -c "import os; print(os.name)")" in
   nt) EXTRA_ARGS+=(--noconsole) ;;
 esac
+WORKDIR="$(mktemp -d)"
+command -v cygpath >/dev/null 2>&1 && WORKDIR="$(cygpath -m "$WORKDIR")"
 python3 -m PyInstaller --noconfirm --clean --onefile \
   --name knowledge-engine-backend \
   --add-data "${ROOT}/knowledge_engine/web/static${SEP}knowledge_engine/web/static" \
@@ -41,8 +45,8 @@ python3 -m PyInstaller --noconfirm --clean --onefile \
   --hidden-import uvicorn.lifespan \
   --hidden-import uvicorn.lifespan.on \
   --distpath desktop/backend-dist \
-  --workpath /tmp/ke-pyinstaller-build \
-  --specpath /tmp/ke-pyinstaller-build \
+  --workpath "$WORKDIR" \
+  --specpath "$WORKDIR" \
   desktop/scripts/backend_main.py
 
 echo "后端二进制已生成：desktop/backend-dist/knowledge-engine-backend"
